@@ -1,25 +1,25 @@
 package esmeta.peval.util
 
 import esmeta.ir.{Name, Temp, Var, Global, Local}
-import esmeta.state.{DynamicAddr}
-import scala.collection.mutable.{Map as MMap}
 import esmeta.peval.pstate.*
+import esmeta.state.{DynamicAddr}
 import esmeta.util.BaseUtils.cached
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
+import scala.collection.mutable.{Map as MMap}
 
+/* Renamer is a PartialEvaluator-level global state */
 class Renamer private (
   // names: MMap[(String, Int, Int), String] ,
   temps: MMap[(Int, Int, Int), Int],
-  private var countCall: Int = 0,
-  private var countTemp: Int = 0,
-  private var dynamicAddr: Long = 0,
+  private var countCall: AtomicInteger = AtomicInteger(0),
+  private var countTemp: AtomicInteger = AtomicInteger(0),
+  private var dynamicAddr: AtomicLong = AtomicLong(0),
 ) {
 
   /* to distinguish func names when renaming locals, WITHOUT USING CFG. */
   val funcNameToInt =
-    var count = 0;
-    cached { _ =>
-      count += 1; count
-    }
+    var count = AtomicInteger(0);
+    cached { _ => count.getAndIncrement() }
 
   def get(x: Var, ctx: PContext): Var = x match
     case Global(name) => Global(name)
@@ -40,17 +40,11 @@ class Renamer private (
         temps += key -> i; Temp(i)
       case Some(v) => Temp(v)
 
-  def newCallCount =
-    countCall += 1;
-    countCall
+  def newCallCount = countCall.getAndIncrement()
 
-  def newTempCount =
-    countTemp += 1;
-    countTemp
+  def newTempCount = countTemp.getAndIncrement()
 
-  def newAddr =
-    dynamicAddr += 1;
-    DynamicAddr(dynamicAddr)
+  def newAddr = DynamicAddr(dynamicAddr.getAndIncrement())
 
   // 변수_함수id_callcount
   // (temp_함수id_callcount) -> map
