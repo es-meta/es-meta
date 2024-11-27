@@ -19,6 +19,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.{Map as MMap, Set as MSet}
 import scala.math.{BigInt as SBigInt}
 import scala.util.{Try, Success, Failure}
+import esmeta.ir.util.Walker
 
 /** IR PartialEvaluator */
 class PartialEvaluator private (
@@ -544,24 +545,58 @@ class PartialEvaluator private (
 
     Try {
       val (body, after) = peval(sdo.body, calleePst)
-      after.callStack match
-        case Nil => /* never */ ???
-        case callerCtx :: rest =>
-          val calleeCtx = after.context;
-          after.callStack = rest
-          after.context = callerCtx.ctxt
-          after.define(
-            newLhs,
-            calleeCtx.ret.toPredict(throw NoReturnValue),
-          )
-          (ISeq(List(ISeq(allocations), body)), after)
-    }.recoverWith {
-      case NoMoreInline() =>
-        pst.define(newLhs, Unknown)
-        pst.heap.clear(vs.map(_._1)) // ...
-        Success(
-          (ISdoCall(newLhs, newBase, method, vs.map(_._2)), pst),
-        )
+      after.context.ret match
+        case Zero => { throw NoReturnValue }
+        case One(elem) => {
+          after.callStack match
+            case Nil => /* never */ ???
+            case callerCtx :: rest =>
+              val calleeCtx = after.context;
+              after.callStack = rest
+              after.context = callerCtx.ctxt
+              after.define(
+                newLhs,
+                calleeCtx.ret.toPredict(throw NoReturnValue),
+              )
+              val substitutor = new Walker {
+                override def walk(inst: Inst): Inst = inst match
+                  case IReturn(expr) => IAssign(newLhs, expr)
+                  case _             => super.walk(inst)
+              }
+              (ISeq(List(ISeq(allocations), substitutor.walk(body))), after)
+        }
+        case Many => {
+          // TODO add fork
+
+          /*
+          val forked = Func(
+                      sdo.main,
+                      sdo.kind,
+                      s"${sdo.name}Forked${PartialEvaluator.getForkId}", // how ??
+                      sdo.params, // how??
+                      sdo.retTy,
+                      ISeq(List(body)),
+                      Some(sdo.name),
+                      sdo.algo,
+                    )
+
+                    this.forked += forked
+
+                    pst.define(newLhs, Unknown)
+                    pst.heap.clear(vs.map(_._1)) // ...
+                    (
+                      ISdoCall(
+                        newLhs,
+                        newBase,
+                        method // how??
+                        ,
+                        vs.map(_._2),
+                      ),
+                      pst,
+                    )
+           */
+          ???
+        }
     }.get
   }
 
@@ -614,16 +649,65 @@ class PartialEvaluator private (
 
     Try {
       val (body, after) = peval(callee.body, calleePst)
-      after.callStack match
-        case Nil => /* never */ ???
-        case callerCtx :: rest =>
-          val calleeCtx = after.context;
-          after.callStack = rest
-          after.context = callerCtx.ctxt
-          val retVal = calleeCtx.ret
-            .toPredict(throw NoReturnValue)
-          after.define(newLhs, retVal)
-          (ISeq(List(ISeq(allocations), body)), after)
+      after.context.ret match
+        case Zero => throw NoReturnValue
+        case One(elem) => {
+          after.callStack match
+            case Nil => /* never */ ???
+            case callerCtx :: rest =>
+              val calleeCtx = after.context;
+              after.callStack = rest
+              after.context = callerCtx.ctxt
+              val retVal = calleeCtx.ret
+                .toPredict(throw NoReturnValue)
+              after.define(newLhs, retVal)
+              val substitutor = new Walker {
+                override def walk(inst: Inst): Inst = inst match
+                  case IReturn(expr) => IAssign(newLhs, expr)
+                  case _             => super.walk(inst)
+              }
+              (ISeq(List(ISeq(allocations), substitutor.walk(body))), after)
+        }
+        case Many => {
+
+          after.callStack match
+            case Nil => /* never */ ???
+            case callerCtx :: rest =>
+              val calleeCtx = after.context;
+              after.callStack = rest
+              after.context = callerCtx.ctxt
+              val retVal = calleeCtx.ret
+                .toPredict(throw NoReturnValue)
+              after.define(newLhs, retVal)
+              val substitutor = new Walker {
+                override def walk(inst: Inst): Inst = inst match
+                  case IReturn(expr) => IAssign(newLhs, expr)
+                  case _             => super.walk(inst)
+              }
+
+              val newName = s"${callee.name}Forked${PartialEvaluator.getForkId}"
+
+              val forked = Func(
+                callee.main,
+                callee.kind,
+                newName,
+                callee.params,
+                callee.retTy,
+                ISeq(List(body)),
+                Some(callee.name),
+                callee.algo,
+              )
+
+              this.forked += forked
+
+              pst.define(newLhs, Unknown)
+              pst.heap.clear(vs.map(_._1)) // ...
+              // fork하면 -> 새 함수 이름을 만들어서 그걸 부르도록 하자!
+              // 생각해보니 -> ICall 함수 이름이 아니라 함수 값 (클로저 값)을 들고 있다.
+              // 간단한 케이스만 하거나 ? 아예 이름으로 구분하지 않게 하거나?
+              val newFExpr = EClo(newName, ???) // ???
+              (ICall(newLhs, newFExpr, vs.map(_._2)), after)
+        }
     }.recoverWith {
       case NoMoreInline() =>
         pst.define(newLhs, Unknown)
@@ -721,10 +805,19 @@ class PartialEvaluator private (
       _.getSdo[Func](_)(using program.spec, funcMap),
     )
 
+  object Logger {
+    def logForked(f: Func): Unit = {
+      logPW.foreach { pw =>
+        pw.println(s"[FORKED] ${f.name}"); pw.flush
+      }
+    }
+  }
 }
 
 /** IR PartialEvaluator */
 object PartialEvaluator {
+
+  private def getForkId: Int = GlobalRenamer.getFuncId
 
   /** create new Renamer and PState for partial evaluation */
   private def createCleanState(func: Func): (Renamer, PState) = {
