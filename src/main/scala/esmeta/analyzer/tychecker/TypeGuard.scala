@@ -12,31 +12,38 @@ import esmeta.util.BaseUtils.*
 trait TypeGuardDecl { self: TyChecker =>
 
   /** type guard */
-  case class TypeGuard(map: Map[RefinementKind, SymPred] = Map()) {
+  case class TypeGuard(map: Map[RefinementKind, TypeConstr] = Map()) {
     def isEmpty: Boolean = map.isEmpty
     def nonEmpty: Boolean = !isEmpty
     def kinds: Set[RefinementKind] = map.keySet
-    def get(kind: RefinementKind): Option[SymPred] = map.get(kind)
-    def apply(kind: RefinementKind): SymPred = map.getOrElse(kind, SymPred())
+    def get(kind: RefinementKind): Option[TypeConstr] = map.get(kind)
+    def apply(kind: RefinementKind): TypeConstr =
+      map.getOrElse(kind, TypeConstr())
     def bases: Set[SymBase] = map.values.flatMap(_.bases).toSet
+
     def kill(bases: Set[SymBase])(using AbsState): TypeGuard = TypeGuard(for {
       (kind, pred) <- map
       newPred = pred.kill(bases)
       if newPred.nonTop
     } yield kind -> newPred)
+
     def forReturn(symEnv: Map[Sym, ValueTy]): TypeGuard = TypeGuard(for {
       (kind, pred) <- map
       newPred = pred.forReturn(symEnv)
       if newPred.nonTop
     } yield kind -> newPred)
+
     def filter(ty: ValueTy): TypeGuard =
       TypeGuard(map.filter { (kind, _) => !(kind.ty && ty).isBottom })
+
     def has(x: SymBase): Boolean = map.values.exists(_.has(x))
+
     def <=(that: TypeGuard): Boolean = that.map.forall { (kind, r) =>
       this.map.get(kind) match
         case Some(l) => l <= r
         case None    => false
     }
+
     def ||(that: TypeGuard)(lty: ValueTy, rty: ValueTy): TypeGuard =
       val (lkinds, rkinds) = (this.kinds, that.kinds)
       val kinds =
@@ -48,19 +55,44 @@ trait TypeGuardDecl { self: TyChecker =>
           case (Some(l), Some(r)) => l || r
           case (Some(l), None)    => l
           case (None, Some(r))    => r
-          case _                  => SymPred()
+          case _                  => TypeConstr()
         if !pred.isTop
       } yield kind -> pred).toMap)
+
     def &&(that: TypeGuard): TypeGuard = TypeGuard((for {
       kind <- (this.kinds ++ that.kinds).toList
       pred = this(kind) && that(kind)
       if !pred.isTop
     } yield kind -> pred).toMap)
+
+    /** Generalize the type guard to unrestricted with the demanded type.
+      *
+      * @param upperTy
+      *   the concrete upper bound type of the associated symbolic type
+      * @param ty
+      *   type to be checked
+      * @return
+      *   symbolic predicate ensured when the abstract value is refined to `ty`
+      */
+    def evaluate(upperTy: ValueTy)(ty: ValueTy): TypeConstr =
+      if ((upperTy && ty).isBottom) TypeConstr()
+      else {
+        val preds = for {
+          (kind, pred) <- map
+          if ty <= kind.ty
+        } yield pred
+        if (preds.nonEmpty) preds.reduce(_ && _)
+        else TypeConstr()
+      }
+
     override def toString: String = (new Appender >> this).toString
   }
+
   object TypeGuard {
     val Empty: TypeGuard = TypeGuard()
-    def apply(ps: (RefinementKind, SymPred)*): TypeGuard = TypeGuard(ps.toMap)
+    def apply(ps: (RefinementKind, TypeConstr)*): TypeGuard = TypeGuard(
+      ps.toMap,
+    )
   }
 
   /** type refinement target */
@@ -122,18 +154,18 @@ trait TypeGuardDecl { self: TyChecker =>
   }
 
   /** symbolic predicates */
-  case class SymPred(
+  case class TypeConstr(
     map: Map[SymBase, (ValueTy, Provenance)] = Map(),
     sexpr: Option[(SymExpr, Provenance)] = None,
   ) {
     def isTop: Boolean = map.isEmpty && sexpr.isEmpty
     def nonTop: Boolean = !isTop
-    def <=(that: SymPred): Boolean =
+    def <=(that: TypeConstr): Boolean =
       that.map.forall {
         case (x, (rty, _)) =>
           this.map.get(x).fold(false) { case (lty, _) => lty <= rty }
       } && (this.sexpr == that.sexpr)
-    def ||(that: SymPred): SymPred = SymPred(
+    def ||(that: TypeConstr): TypeConstr = TypeConstr(
       map = (for {
         x <- (this.map.keySet intersect that.map.keySet).toList
         (lty, lprov) = this.map(x)
@@ -143,7 +175,7 @@ trait TypeGuardDecl { self: TyChecker =>
       } yield x -> (ty, prov)).toMap,
       sexpr = this.sexpr || that.sexpr,
     )
-    def &&(that: SymPred): SymPred = SymPred(
+    def &&(that: TypeConstr): TypeConstr = TypeConstr(
       map = (for {
         x <- (this.map.keySet ++ that.map.keySet).toList
         (lty, lprov) = this.map.getOrElse(x, (AnyT, Provenance()))
@@ -158,12 +190,12 @@ trait TypeGuardDecl { self: TyChecker =>
     def bases: Set[SymBase] =
       map.keySet.collect { case s: Sym => s } ++
       sexpr.fold(Set[SymBase]()) { (sexpr, _) => sexpr.bases }
-    def kill(bases: Set[SymBase])(using AbsState): SymPred =
+    def kill(bases: Set[SymBase])(using AbsState): TypeConstr =
       this.copy(
         map.filter { case (x, _) => !bases.contains(x) },
         sexpr.fold(None)((e, p) => e.kill(bases).map(_ -> p)),
       )
-    def forReturn(symEnv: Map[Sym, ValueTy]): SymPred = SymPred(
+    def forReturn(symEnv: Map[Sym, ValueTy]): TypeConstr = TypeConstr(
       map = for {
         case (x: Sym, (ty, prov)) <- map
         origTy = symEnv.getOrElse(x, BotT)
@@ -175,11 +207,12 @@ trait TypeGuardDecl { self: TyChecker =>
       sexpr.fold(provs)(_._2 :: provs).map(_.depth).max
     override def toString: String = (new Appender >> this).toString
   }
-  object SymPred {
-    def apply(pair: (SymExpr, Provenance)): SymPred =
-      SymPred(sexpr = Some(pair))
-    def apply(pairs: (SymBase, (ValueTy, Provenance))*): SymPred =
-      SymPred(pairs.toMap, None)
+
+  object TypeConstr {
+    def apply(pair: (SymExpr, Provenance)): TypeConstr =
+      TypeConstr(sexpr = Some(pair))
+    def apply(pairs: (SymBase, (ValueTy, Provenance))*): TypeConstr =
+      TypeConstr(pairs.toMap, None)
   }
 
   /** symbolic bases */
@@ -271,7 +304,11 @@ trait TypeGuardDecl { self: TyChecker =>
         case _                            => None
   }
 
-  /** symbolic references */
+  /** Symbolic reference
+    *
+    * This is a path object which makes available to refine a canonical local
+    * variable or a symbol, which are represented by `SymBase`.
+    */
   enum SymRef {
     case SBase(base: SymBase)
     case SField(base: SymRef, field: SymTy)
@@ -345,8 +382,8 @@ trait TypeGuardDecl { self: TyChecker =>
       }
     }
     app
-  given Rule[SymPred] = (app, pred) =>
-    import SymPred.*
+  given Rule[TypeConstr] = (app, pred) =>
+    import TypeConstr.*
     given Rule[(ValueTy, Provenance)] =
       case (app, (ty, prov)) => app >> ty >> prov
     given Rule[Map[SymBase, (ValueTy, Provenance)]] = sortedMapRule(sep = ": ")
@@ -355,7 +392,8 @@ trait TypeGuardDecl { self: TyChecker =>
   given Rule[TypeGuard] = (app, guard) =>
     given Ordering[RefinementKind] = Ordering.by(_.toString)
     given Rule[RefinementKind] = (app, kind) => app >> kind.ty
-    given Rule[Map[RefinementKind, SymPred]] = sortedMapRule("{", "}", " => ")
+    given Rule[Map[RefinementKind, TypeConstr]] =
+      sortedMapRule("{", "}", " => ")
     app >> guard.map
   given Rule[RefinementTarget] = (app, target) =>
     import RefinementTarget.*

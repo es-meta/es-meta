@@ -92,7 +92,7 @@ trait AbsValueDecl { self: TyChecker =>
     /** introduce a new type guard */
     def getTypeGuard(using st: AbsState): TypeGuard = TypeGuard((for {
       kind <- RefinementKind.from(this.ty).toList
-      pred = st.pred
+      pred = st.constr
       if pred.nonTop
     } yield kind -> pred).toMap)
 

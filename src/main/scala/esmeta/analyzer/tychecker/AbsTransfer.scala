@@ -53,20 +53,22 @@ trait AbsTransferDecl { analyzer: TyChecker =>
           import RefinementKind.*
           (for { v <- transfer(c); newSt <- get } yield {
             if (v.ty.bool.contains(true))
-              val rst = refine(c, v, true)(newSt)
-              val pred = v.guard.get(RefinementKind(TrueT))
-              if (detail) logRefined(BranchTarget(br, true), pred, newSt, rst)
+              val rst = refine(c, v, TrueT)(newSt)
               thenNode.map(analyzer += getNextNp(np, _) -> rst)
+              if (detail)
+                val constr = v.guard.get(RefinementKind(TrueT))
+                logRefined(BranchTarget(br, true), constr, newSt, rst)
             if (v.ty.bool.contains(false))
-              val rst = refine(c, v, false)(newSt)
-              val pred = v.guard.get(RefinementKind(FalseT))
-              if (detail) logRefined(BranchTarget(br, false), pred, newSt, rst)
+              val rst = refine(c, v, FalseT)(newSt)
               elseNode.map(analyzer += getNextNp(np, _) -> rst)
+              if (detail)
+                val constr = v.guard.get(RefinementKind(FalseT))
+                logRefined(BranchTarget(br, false), constr, newSt, rst)
           })(st)
 
     def logRefined(
       target: RefinementTarget,
-      pred: Option[SymPred],
+      constr: Option[TypeConstr],
       st: AbsState,
       refinedSt: AbsState,
     ): Unit =
@@ -77,35 +79,44 @@ trait AbsTransferDecl { analyzer: TyChecker =>
         if refinedTy != ty
       } yield x
       if (xs.isEmpty) refined -= target
-      else refined += target -> (xs.toSet, pred.fold(0)(_.depth))
+      else refined += target -> (xs.toSet, constr.fold(0)(_.depth))
 
-    /** refine with an expression and its abstract value */
+    /** Refine the state based on the given expression, evaluated value, and the
+      * required type.
+      *
+      * @param expr
+      *   an expression
+      * @param v
+      *   an abstract value evaluated from the `expr`
+      * @param ty
+      *   a required type
+      * @return
+      *   an updater
+      */
     def refine(
       expr: Expr,
       v: AbsValue,
-      positive: Boolean,
-    )(using np: NodePoint[_]): Updater = st =>
+      ty: ValueTy,
+    )(using st: AbsState, np: NodePoint[_]): Updater = st =>
       import RefinementKind.*
+      val kind = RefinementKind(ty)
       if (inferTypeGuard) {
-        // new analysis system
-        val kind =
-          if (positive) RefinementKind(TrueT) else RefinementKind(FalseT)
-        val newSt = (for {
+        // This additional guard is inferred here because of the performance reason
+        val newGuard = (for {
           ref <- toSymRef(expr, v)
-          (kind, ty) =
-            if (positive) (RefinementKind(TrueT), TrueT)
-            else (RefinementKind(FalseT), FalseT)
-          pair <- getRefiner(ref -> ty, expr, kind)(using np, st)
-        } yield refine(SymPred(pair))(st))
-          .getOrElse(st)
-        v.guard.get(kind).fold(newSt)(refine(_)(newSt))
+          pair <- reduceToBase(ref -> kind.ty, np)
+        } yield TypeGuard(kind -> TypeConstr(pair))).fold(v.guard) { guard =>
+          v.guard && guard
+        }
+        refine(v.guard.evaluate(v.ty)(kind.ty))(st)
       } else {
-        // original analysis system
-        val kind =
-          if (positive) RefinementKind(TrueT) else RefinementKind(FalseT)
         v.guard.get(kind) match
-          case Some(pred) => refine(pred)(st) // for default type guards
-          case None       => refine(expr, positive)(st) // syntactic refinement
+          case Some(constr) => refine(constr)(st) // for default type guards
+          case None =>
+            ty match // syntactic refinement
+              case TrueT  => syntacticRefine(expr, true)(st)
+              case FalseT => syntacticRefine(expr, false)(st)
+              case _      => throw new Exception(s"Unsupported type: $ty")
       }
 
     /** get next node point */
@@ -251,7 +262,16 @@ trait AbsTransferDecl { analyzer: TyChecker =>
           }
     }
 
-    /** conversion to symbolic references */
+    /** Returns a symbolic reference which can be refined if the `expr`
+      * evaluates to the `value`.
+      *
+      * @param expr
+      *   an expression
+      * @param value
+      *   an abstract value evaluated from the `expr`
+      * @return
+      *   a symbolic reference if it can be refined, otherwise `None`
+      */
     def toSymRef(expr: Expr, value: AbsValue): Option[SymRef] =
       value.symty match
         case SRef(ref) => Some(ref)
@@ -260,14 +280,22 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             case ERef(ref) => toSymRef(ref)
             case _         => None
 
-    /** conversion to symbolic references */
+    /** Returns an according symbolic reference when the IR Reference if given.
+      *
+      * @param ref
+      *   an IR reference
+      * @param value
+      *   an abstract value evaluated from the `ref`
+      * @return
+      *   a symbolic reference if it can be refined, otherwise `None`
+      */
     def toSymRef(ref: Ref, value: AbsValue): Option[SymRef] =
       value.symty match
         case SRef(ref) => Some(ref)
         case _         => toSymRef(ref)
 
     /** conversion to symbolic references */
-    def toSymRef(ref: Ref): Option[SymRef] = ref match
+    private def toSymRef(ref: Ref): Option[SymRef] = ref match
       case x: Local => Some(SBase(x))
       case Field(base, EStr(field)) =>
         for {
@@ -422,15 +450,15 @@ trait AbsTransferDecl { analyzer: TyChecker =>
         for {
           v <- transfer(expr)
           st <- get
-          pred = v.guard.get(RefinementKind(TrueT))
-          _ <- modify(refine(expr, v, true))
+          constr = v.guard.get(RefinementKind(TrueT))
+          _ <- modify(refine(expr, v, TrueT)(using st))
           refinedSt <- get
           given AbsState = refinedSt
           _ = if (detail) np.node match
             case block: Block =>
               logRefined(
                 RefinementTarget.AssertTarget(block, idx),
-                pred,
+                constr,
                 st,
                 refinedSt,
               )
@@ -687,7 +715,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             val lbools = l.ty.bool.set
             if (lbools.contains(false)) bools += false
             if (lbools.contains(true)) {
-              val (r, _) = transfer(right)(refine(left, l, true)(st))
+              val (r, _) = transfer(right)(refine(left, l, TrueT)(st))
               bools ++= r.ty.bool.set
             }
             (AbsValue(BoolT(bools)), st)
@@ -698,7 +726,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             val lbools = l.ty.bool.set
             if (lbools.contains(true)) bools += true
             if (lbools.contains(false))
-              val (r, _) = transfer(right)(refine(left, l, false)(st))
+              val (r, _) = transfer(right)(refine(left, l, FalseT)(st))
               bools ++= r.ty.bool.set
             (AbsValue(BoolT(bools)), st)
           r
@@ -712,15 +740,16 @@ trait AbsTransferDecl { analyzer: TyChecker =>
     } yield v
 
     /** construct a symbolic predicate with the current symbolic predicate */
-    def withCur(pred: SymPred)(using st: AbsState): SymPred = st.pred && pred
+    def withCur(constr: TypeConstr)(using st: AbsState): TypeConstr =
+      st.constr && constr
 
     /** get a type guard */
     def getTypeGuard(expr: Expr)(using np: NodePoint[_]): Result[TypeGuard] = {
       import RefinementKind.*
       expr match {
         case EBool(bool) =>
-          val kind = if (bool) RefinementKind(TrueT) else RefinementKind(FalseT)
-          get(st => TypeGuard(Map(kind -> withCur(SymPred())(using st))))
+          val kind = RefinementKind(BoolT(bool))
+          get(st => TypeGuard(Map(kind -> withCur(TypeConstr())(using st))))
         case ERecord(tname @ "CompletionRecord", fields) =>
           for {
             pairs <- join(fields.map {
@@ -779,37 +808,33 @@ trait AbsTransferDecl { analyzer: TyChecker =>
               )
               if (lty != refinedTy) Some(refinedTy) else None
             }
-            var lmap: Map[RefinementKind, SymPred] = Map()
+            var lmap: Map[RefinementKind, TypeConstr] = Map()
             toSymRef(l, lv).map { ref =>
               aux(lty, rty, true, true).map { thenTy =>
                 if (lty != thenTy && !thenTy.isBottom)
-                  getRefiner(ref -> thenTy, expr, RefinementKind(TrueT)).map {
-                    pair =>
-                      lmap += RefinementKind(TrueT) -> withCur(SymPred(pair))
+                  reduceToBase(ref -> thenTy, np).map { pair =>
+                    lmap += RefinementKind(TrueT) -> withCur(TypeConstr(pair))
                   }
               }
               aux(lty, rty, false, true).map { elseTy =>
                 if (lty != elseTy && !elseTy.isBottom)
-                  getRefiner(ref -> elseTy, expr, RefinementKind(FalseT)).map {
-                    pair =>
-                      lmap += RefinementKind(FalseT) -> withCur(SymPred(pair))
+                  reduceToBase(ref -> elseTy, np).map { pair =>
+                    lmap += RefinementKind(FalseT) -> withCur(TypeConstr(pair))
                   }
               }
             }
-            var rmap: Map[RefinementKind, SymPred] = Map()
+            var rmap: Map[RefinementKind, TypeConstr] = Map()
             toSymRef(r, rv).map { ref =>
               aux(rty, lty, true, false).map { thenTy =>
                 if (rty != thenTy && !thenTy.isBottom)
-                  getRefiner(ref -> thenTy, expr, RefinementKind(TrueT)).map {
-                    pair =>
-                      rmap += RefinementKind(TrueT) -> withCur(SymPred(pair))
+                  reduceToBase(ref -> thenTy, np).map { pair =>
+                    rmap += RefinementKind(TrueT) -> withCur(TypeConstr(pair))
                   }
               }
               aux(rty, lty, false, false).map { elseTy =>
                 if (rty != elseTy && !elseTy.isBottom)
-                  getRefiner(ref -> elseTy, expr, RefinementKind(FalseT)).map {
-                    pair =>
-                      rmap += RefinementKind(FalseT) -> withCur(SymPred(pair))
+                  reduceToBase(ref -> elseTy, np).map { pair =>
+                    rmap += RefinementKind(FalseT) -> withCur(TypeConstr(pair))
                   }
               }
             }
@@ -817,13 +842,13 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             val rguard = TypeGuard(rmap)
             val guard = (for {
               kind <- List(RefinementKind(TrueT), RefinementKind(FalseT))
-              pred = {
+              constr = {
                 lguard(kind) &&
                 rguard(kind)
               }
-              newPred = withCur(pred)
-              if newPred.nonTop
-            } yield kind -> newPred).toMap
+              newConstr = withCur(constr)
+              if newConstr.nonTop
+            } yield kind -> newConstr).toMap
             TypeGuard(guard)
           }
         case EBinary(BOp.Eq, ERef(ref), r) =>
@@ -836,20 +861,18 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             val rty = rv.ty
             val thenTy = lty && rty
             val elseTy = if (rty.isSingle) lty -- rty else lty
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             var bools = Set(true, false)
             toSymRef(ref, lv).map { ref =>
               if (thenTy.isBottom) bools -= true
               else
-                getRefiner(ref -> thenTy, expr, RefinementKind(TrueT)).map {
-                  pair =>
-                    guard += RefinementKind(TrueT) -> withCur(SymPred(pair))
+                reduceToBase(ref -> thenTy, np).map { pair =>
+                  guard += RefinementKind(TrueT) -> withCur(TypeConstr(pair))
                 }
               if (elseTy.isBottom) bools -= false
               else
-                getRefiner(ref -> elseTy, expr, RefinementKind(FalseT)).map {
-                  pair =>
-                    guard += RefinementKind(FalseT) -> withCur(SymPred(pair))
+                reduceToBase(ref -> elseTy, np).map { pair =>
+                  guard += RefinementKind(FalseT) -> withCur(TypeConstr(pair))
                 }
             }
             TypeGuard(guard)
@@ -863,22 +886,16 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             val rty = givenTy.toValue
             val thenTy = lty && rty
             val elseTy = lty -- rty
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             var bools = Set(true, false)
             toSymRef(ref, lv).map { ref =>
-              if (lty != thenTy)
-                if (thenTy.isBottom) bools -= true
-                else
-                  getRefiner(ref -> thenTy, expr, RefinementKind(TrueT)).map {
-                    pair =>
-                      guard += RefinementKind(TrueT) -> withCur(SymPred(pair))
+              if (lty != thenTy && !thenTy.isBottom)
+                  reduceToBase(ref -> thenTy, np).map { pair =>
+                    guard += RefinementKind(TrueT) -> withCur(TypeConstr(pair))
                   }
-              if (lty != elseTy)
-                if (elseTy.isBottom) bools -= false
-                else
-                  getRefiner(ref -> elseTy, expr, RefinementKind(FalseT)).map {
-                    pair =>
-                      guard += RefinementKind(FalseT) -> withCur(SymPred(pair))
+              if (lty != elseTy && !elseTy.isBottom)
+                  reduceToBase(ref -> elseTy, np).map { pair =>
+                    guard += RefinementKind(FalseT) -> withCur(TypeConstr(pair))
                   }
             }
             TypeGuard(guard)
@@ -896,22 +913,15 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             )
             val thenTy = aux(binding)
             val elseTy = aux(lty.record(field) -- binding)
-            var guard: Map[RefinementKind, SymPred] = Map()
-            var bools = Set(true, false)
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             toSymRef(x, lv).map { ref =>
-              if (lty != thenTy)
-                if (thenTy.isBottom) bools -= true
-                else
-                  getRefiner(ref -> thenTy, expr, RefinementKind(TrueT)).map {
-                    pair =>
-                      guard += RefinementKind(TrueT) -> withCur(SymPred(pair))
+              if (lty != thenTy && !thenTy.isBottom)
+                  reduceToBase(ref -> thenTy, np).map { pair =>
+                    guard += RefinementKind(TrueT) -> withCur(TypeConstr(pair))
                   }
-              if (lty != elseTy)
-                if (elseTy.isBottom) bools -= false
-                else
-                  getRefiner(ref -> elseTy, expr, RefinementKind(FalseT)).map {
-                    pair =>
-                      guard += RefinementKind(FalseT) -> withCur(SymPred(pair))
+              if (lty != elseTy && !elseTy.isBottom)
+                  reduceToBase(ref -> elseTy, np).map { pair =>
+                    guard += RefinementKind(FalseT) -> withCur(TypeConstr(pair))
                   }
             }
             TypeGuard(guard)
@@ -922,12 +932,12 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             fv <- transfer(field)
             given AbsState <- get
           } yield {
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             for {
               bref <- toSymRef(x, bv)
               fref <- toSymRef(field, fv)
               pexpr = SEExists(SField(bref, SRef(fref)))
-            } guard += RefinementKind(TrueT) -> SymPred(
+            } guard += RefinementKind(TrueT) -> TypeConstr(
               Map(),
               Some(pexpr, Provenance(np.func)),
             )
@@ -938,14 +948,14 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             lv <- transfer(l)
             rv <- transfer(r)
           } yield {
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             for {
               lref <- toSymRef(l, lv)
               rref <- toSymRef(r, rv)
               ltypeOf = SETypeOf(SERef(lref))
               rtypeOf = SETypeOf(SERef(rref))
               pexpr = SEEq(ltypeOf, rtypeOf)
-            } guard += RefinementKind(TrueT) -> SymPred(
+            } guard += RefinementKind(TrueT) -> TypeConstr(
               Map(),
               Some(pexpr, Provenance(np.func)),
             )
@@ -966,22 +976,20 @@ trait AbsTransferDecl { analyzer: TyChecker =>
               case _ => lty
             val thenTy = aux(true)
             val elseTy = aux(false)
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             var bools = Set(true, false)
             toSymRef(ref, lv).map { ref =>
               if (lty != thenTy)
                 if (thenTy.isBottom) bools -= true
                 else
-                  getRefiner(ref -> thenTy, expr, RefinementKind(TrueT)).map {
-                    pair =>
-                      guard += RefinementKind(TrueT) -> withCur(SymPred(pair))
+                  reduceToBase(ref -> thenTy, np).map { pair =>
+                    guard += RefinementKind(TrueT) -> withCur(TypeConstr(pair))
                   }
               if (lty != elseTy)
                 if (elseTy.isBottom) bools -= false
                 else
-                  getRefiner(ref -> elseTy, expr, RefinementKind(FalseT)).map {
-                    pair =>
-                      guard += RefinementKind(FalseT) -> withCur(SymPred(pair))
+                  reduceToBase(ref -> elseTy, np).map { pair =>
+                    guard += RefinementKind(FalseT) -> withCur(TypeConstr(pair))
                   }
             }
             TypeGuard(guard)
@@ -995,7 +1003,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             lt = guard(RefinementKind(TrueT))
             lf = guard(RefinementKind(FalseT))
           } yield {
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             guard += RefinementKind(TrueT) -> withCur(lf)
             guard += RefinementKind(FalseT) -> withCur(lt)
             TypeGuard(guard)
@@ -1013,21 +1021,21 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             lt = lguard(RefinementKind(TrueT))
             lf = lguard(RefinementKind(FalseT))
           } yield {
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             val refinedSt = if (lf.isTop) st else refine(lf)(st)
-            val (thenPred, _) = (for {
+            val (thenConstr, _) = (for {
               rv <- transfer(r)
               rt = rv.guard(RefinementKind(TrueT))
             } yield if (hasT) lt || rt else rt)(refinedSt)
-            if (thenPred.nonTop)
-              guard += RefinementKind(TrueT) -> withCur(thenPred)
-            val (elsePred, _) = (for {
+            if (thenConstr.nonTop)
+              guard += RefinementKind(TrueT) -> withCur(thenConstr)
+            val (elseConstr, _) = (for {
               rv <- transfer(r)
               rf = rv.guard(RefinementKind(FalseT))
               hasF = lty.bool.contains(false)
             } yield lf && rf)(refinedSt)
-            if (elsePred.nonTop)
-              guard += RefinementKind(FalseT) -> withCur(elsePred)
+            if (elseConstr.nonTop)
+              guard += RefinementKind(FalseT) -> withCur(elseConstr)
             TypeGuard(guard)
           }
         case EBinary(BOp.And, l, r) =>
@@ -1043,27 +1051,29 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             lt = lguard(RefinementKind(TrueT))
             lf = lguard(RefinementKind(FalseT))
           } yield {
-            var guard: Map[RefinementKind, SymPred] = Map()
+            var guard: Map[RefinementKind, TypeConstr] = Map()
             val refinedSt = if (lt.isTop) st else refine(lt)(st)
-            val (thenPred, _) = (for {
+            val (thenConstr, _) = (for {
               rv <- transfer(r)
               rt = rv.guard(RefinementKind(TrueT))
             } yield lt && rt)(refinedSt)
-            if (thenPred.nonTop)
-              guard += RefinementKind(TrueT) -> withCur(thenPred)
-            val (elsePred, _) = (for {
+            if (thenConstr.nonTop)
+              guard += RefinementKind(TrueT) -> withCur(thenConstr)
+            val (elseConstr, _) = (for {
               rv <- transfer(r)
               rf = rv.guard(RefinementKind(FalseT))
             } yield if (hasF) lf || rf else rf)(refinedSt)
-            if (elsePred.nonTop)
-              guard += RefinementKind(FalseT) -> withCur(elsePred)
+            if (elseConstr.nonTop)
+              guard += RefinementKind(FalseT) -> withCur(elseConstr)
             TypeGuard(guard)
           }
         case EEnum(name) =>
           if RefinementKind.set.contains(EnumT(name)) then
             get(st => {
               TypeGuard(
-                Map(RefinementKind(EnumT(name)) -> withCur(SymPred())(using st)),
+                Map(
+                  RefinementKind(EnumT(name)) -> withCur(TypeConstr())(using st),
+                ),
               )
             })
           else TypeGuard.Empty
@@ -1262,8 +1272,8 @@ trait AbsTransferDecl { analyzer: TyChecker =>
     )(using st: AbsState): AbsValue =
       val AbsValue(symty, guard) = value
       val newGuard = TypeGuard((for {
-        (kind, pred) <- guard.map
-        newPred = instantiate(call, pred, map)
+        (kind, constr) <- guard.map
+        newPred = instantiate(call, constr, map)
         if newPred.nonTop
       } yield kind -> newPred).toMap)
       val ivalue @ AbsValue(isymty, iguard) = instantiate(symty, map)
@@ -1272,20 +1282,20 @@ trait AbsTransferDecl { analyzer: TyChecker =>
     /** instantiation of symbolic predicate */
     def instantiate(
       call: Call,
-      pred: SymPred,
+      constr: TypeConstr,
       map: Map[Sym, AbsValue],
-    )(using st: AbsState): SymPred = SymPred(
+    )(using st: AbsState): TypeConstr = TypeConstr(
       map = for {
-        case (x: Sym, (ty, prov)) <- pred.map
+        case (x: Sym, (ty, prov)) <- constr.map
         v <- map.get(x)
         y <- v.symty match
           case SRef(ref) => Some(ref)
           case _         => None
-        (z, zty) <- getRefiner(y -> ty)
+        (z, zty) <- reduceToBase(y -> ty)
         if !(st.getTy(z) <= zty)
       } yield z -> (zty, prov.forReturn(call)),
       sexpr = for {
-        (e, prov) <- pred.sexpr
+        (e, prov) <- constr.sexpr
         newExpr <- instantiate(e, map)
       } yield (newExpr, prov.forReturn(call)),
     )
@@ -1347,7 +1357,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
     // Syntactic Type Refinement
     // -------------------------------------------------------------------------
     /** refine condition */
-    def refine(
+    def syntacticRefine(
       cond: Expr,
       positive: Boolean,
     )(using np: NodePoint[_]): Updater = cond match {
@@ -1424,40 +1434,43 @@ trait AbsTransferDecl { analyzer: TyChecker =>
         refineTypeCheck(ref, ty.ty.toValue, positive)
       // refine logical negation
       case EUnary(UOp.Not, e) =>
-        refine(e, !positive)
+        syntacticRefine(e, !positive)
       // refine logical disjunction
       case EBinary(BOp.Or, l, r) =>
         st =>
-          if (positive) refine(l, true)(st) ⊔ refine(r, true)(st)
-          else refine(r, false)(refine(l, false)(st))
+          if (positive) syntacticRefine(l, true)(st) ⊔ syntacticRefine(r, true)(st)
+          else syntacticRefine(r, false)(syntacticRefine(l, false)(st))
       // refine logical conjunction
       case EBinary(BOp.And, l, r) =>
         st =>
-          if (positive) refine(r, true)(refine(l, true)(st))
-          else refine(l, false)(st) ⊔ refine(r, false)(st)
+          if (positive) syntacticRefine(r, true)(syntacticRefine(l, true)(st))
+          else syntacticRefine(l, false)(st) ⊔ syntacticRefine(r, false)(st)
       // no pruning
       case _ => st => st
     }
 
-    /** refine types */
-    def refine(
-      value: AbsValue,
-      refinedValue: AbsValue,
-    )(using np: NodePoint[_]): Updater =
-      import RefinementKind.*
-      given AbsState = getResult(np)
-      val refined = refinedValue.ty
-
-      join(for {
-        (kind, pred) <- value.guard.map
-        if refined <= kind.ty
-      } yield refine(pred))
-
     /** refine types using symbolic predicates */
     def refine(
-      pred: SymPred,
-    )(using np: NodePoint[_]): Updater =
-      val SymPred(map, expr) = pred
+      constr: TypeConstr,
+    )(using np: NodePoint[_]): Updater = {
+
+      def typeOfType(givenTy: ValueTy): ValueTy = {
+        var ty = BotT
+        givenTy.typeOfNames.map {
+          case "Number"    => ty ||= NumberT
+          case "BigInt"    => ty ||= BigIntT
+          case "String"    => ty ||= StrT
+          case "Boolean"   => ty ||= BoolT
+          case "Undefined" => ty ||= UndefT
+          case "Null"      => ty ||= NullT
+          case "Object"    => ty ||= ObjectT
+          case "Symbol"    => ty ||= SymbolT
+          case _           =>
+        }
+        ty
+      }
+
+      val TypeConstr(map, expr) = constr
       val alias: Map[SymBase, SymBase] = expr.fold(Map()) {
         case (SEEq(SETypeOf(SERef(SBase(x))), SETypeOf(SERef(SBase(y)))), _) =>
           Map(x -> y, y -> x)
@@ -1473,34 +1486,10 @@ trait AbsTransferDecl { analyzer: TyChecker =>
                 case None    => pure(())
             } yield ()
         })
-        _ <- expr.fold(pure(()))((e, prov) => modify(refine(e)))
-        _ <- modify(st => st.copy(pred = st.pred && pred))
+        // _ <- expr.fold(pure(()))((e, prov) => modify(refine(e)))
+        _ <- modify(st => st.copy(constr = withCur(constr)(using st)))
       } yield ()
-
-    def typeOfType(givenTy: ValueTy): ValueTy =
-      var ty = BotT
-      givenTy.typeOfNames.map {
-        case "Number"    => ty ||= NumberT
-        case "BigInt"    => ty ||= BigIntT
-        case "String"    => ty ||= StrT
-        case "Boolean"   => ty ||= BoolT
-        case "Undefined" => ty ||= UndefT
-        case "Null"      => ty ||= NullT
-        case "Object"    => ty ||= ObjectT
-        case "Symbol"    => ty ||= SymbolT
-        case _           =>
-      }
-      ty
-
-    /** refine types using symbolic expressions */
-    def refine(
-      expr: SymExpr,
-    )(using np: NodePoint[_]): Updater =
-      for {
-        _ <- modify(expr match {
-          case _ => st => st // TODO
-        })
-      } yield ()
+    }
 
     /** refine references using types */
     def refine(
@@ -1517,23 +1506,51 @@ trait AbsTransferDecl { analyzer: TyChecker =>
           given AbsState <- get
           refinedV = if (v.ty <= ty.toValue) v else v ⊓ AbsValue(ty)
           _ <- modify(_.update(x, refinedV, refine = true))
-          _ <- refine(v, refinedV) // propagate type guard
+          _ <- v.refineTo(refinedV)
         } yield ()
 
-    def getRefiner(
-      pair: (SymRef, ValueTy),
-      expr: Expr,
-      kind: RefinementKind,
-    )(using
+    /** When the `ref` should be refined to the type `ty`, then this method
+      * returns the type base of the reference should be refined. The returned
+      * type base is a pair of the reference and the type, plus provenance.
+      *
+      * @param ref
+      *   the reference to be refined
+      * @param ty
+      *   the type to be refined
+      * @param np
+      *   the node point used to create provenance
+      * @return
+      *   the type base of the reference should be refined
+      */
+    def reduceToBase(
+      ref: SymRef,
+      ty: ValueTy,
       np: NodePoint[_],
+    )(using
       st: AbsState,
     ): Option[(SymBase, (ValueTy, Provenance))] =
-      getRefiner(pair).map { (base, ty) => base -> (ty, Provenance(np.func)) }
+      reduceToBase(ref -> ty)(using st).map { (base, ty) =>
+        base -> (ty, Provenance(np.func))
+      }
 
-    def getRefiner(
-      pair: (SymRef, ValueTy),
+    def reduceToBase(pair: (SymRef, ValueTy), np: NodePoint[_])(using
+      st: AbsState,
+    ): Option[(SymBase, (ValueTy, Provenance))] =
+      reduceToBase(pair._1, pair._2, np)
+
+    /**
+      * When the `ref` should be refined to the type `ty`, then this method
+      * returns the type base of the reference should be refined.
+      * The returned type base is a pair of the reference and the type.
+      *
+      * @param ref the reference to be refined
+      * @param givenTy the type to be refined
+      * @return the type base of the reference should be refined
+      */
+    def reduceToBase(
+      ref: SymRef,
+      givenTy: ValueTy,
     )(using st: AbsState): Option[(SymBase, ValueTy)] = {
-      val (ref, givenTy) = pair
       ref match
         case SBase(x) =>
           val ty = st.getTy(x)
@@ -1547,9 +1564,12 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             ast = bty.ast,
             record = bty.record.update(field, givenTy, refine = true),
           )
-          getRefiner(base -> refinedTy)
+          reduceToBase(base -> refinedTy)
         case _ => None
     }
+    def reduceToBase(pair: (SymRef, ValueTy))(using
+      st: AbsState,
+    ): Option[(SymBase, ValueTy)] = reduceToBase(pair._1, pair._2)
 
     /** refine types of local variables with equality */
     def refineLocal(
@@ -1565,7 +1585,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
         else if (rv.isSingle) lv -- rv
         else lv
       _ <- modify(_.update(x, refinedV, refine = true))
-      _ <- refine(lv, refinedV)
+      _ <- lv.refineTo(refinedV)
     } yield ()
 
     /** TODO refine types with field equality */
@@ -1596,7 +1616,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
       )
       refinedV = AbsValue(refinedTy)
       _ <- modify(_.update(x, refinedV, refine = true))
-      _ <- refine(lv, refinedV)
+      _ <- lv.refineTo(refinedV)
     } yield ()
 
     /** refine types with field existence */
@@ -1645,7 +1665,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
           refineField(x, field, Binding(ty), positive)
         case _ => identity,
       )
-      _ <- refine(v, refinedV)
+      _ <- v.refineTo(refinedV)
     } yield ()
 
     /** check if the return type can be used */
@@ -1654,6 +1674,23 @@ trait AbsTransferDecl { analyzer: TyChecker =>
         !func.retTy.isImprec &&
         RefinementKind.from(func.retTy.ty.toValue).isEmpty
       )
+    }
+
+    extension(value: AbsValue) {
+      /**
+        * Call this to propagate refinements when the abstract value is refined. 
+        *
+        * @param refinedValue the refined abstract value
+        * @return an updater that propagates the refinements
+        */
+      def refineTo(refinedValue: AbsValue)(using np: NodePoint[_]): Updater = 
+        import RefinementKind.*
+        given AbsState = getResult(np)
+        val refined = refinedValue.ty
+        join(for {
+          (kind, constr) <- value.guard.map
+          if refined <= kind.ty
+        } yield refine(constr))
     }
 
     /** default type guards */
@@ -1729,14 +1766,16 @@ trait AbsTransferDecl { analyzer: TyChecker =>
             case _ => ObjectT
           val prov = Provenance(func)
           val guard =
-            TypeGuard(RefinementKind(NormalT) -> SymPred(0 -> (refined, prov)))
+            TypeGuard(
+              RefinementKind(NormalT) -> TypeConstr(0 -> (refined, prov)),
+            )
           AbsValue(STy(retTy), guard)
         },
         "NewPromiseCapability" -> { (func, vs, retTy, st) =>
           given AbsState = st
           val prov = Provenance(func)
           val guard = TypeGuard(
-            RefinementKind(NormalT) -> SymPred(0 -> (ConstructorT, prov)),
+            RefinementKind(NormalT) -> TypeConstr(0 -> (ConstructorT, prov)),
           )
           AbsValue(STy(retTy), guard)
         },
@@ -1760,7 +1799,7 @@ trait AbsTransferDecl { analyzer: TyChecker =>
           val prov = Provenance(func)
           AbsValue(
             STy(BoolT),
-            TypeGuard(RefinementKind(TrueT) -> SymPred(expr -> prov)),
+            TypeGuard(RefinementKind(TrueT) -> TypeConstr(expr -> prov)),
           )
         },
         "TypedArrayElementType" -> { (func, vs, retTy, st) =>

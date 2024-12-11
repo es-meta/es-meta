@@ -259,7 +259,7 @@ class TyChecker(
     if value.hasTypeGuard(entrySt)
     guard = TypeGuard(for {
       (kind, pred) <- value.guard.map
-      newPred = SymPred(for {
+      newPred = TypeConstr(for {
         pair <- pred.map
         (x, (ty, prov)) = pair
         if !(entrySt.getTy(x) <= ty)
@@ -308,8 +308,8 @@ class TyChecker(
         x -> AbsValue(SRef(SBase(sym))),
         sym -> value.ty,
       )).unzip
-      AbsState(true, newLocals.toMap, symEnv.toMap, SymPred())
-    } else AbsState(true, locals.toMap, Map(), SymPred())
+      AbsState(true, newLocals.toMap, symEnv.toMap, TypeConstr())
+    } else AbsState(true, locals.toMap, Map(), TypeConstr())
 
   /** get initial abstract states in each node point */
   private def getInitNpMap(
