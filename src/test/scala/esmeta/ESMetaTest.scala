@@ -200,14 +200,15 @@ trait ESMetaTest extends funsuite.AnyFunSuite with BeforeAndAfterAll {
     // save abstract result if backward-compatible
     val dirname = s"$TEST_DIR/result/$category"
     mkdir(dirname)
-    val pw = getPrintWriter(s"$dirname/$this")
-    val (x, y) = getScore(resMap)
-    pw.println(s"$tag: $x / $y")
-    pw.close()
+    val pw = () //getPrintWriter(s"$dirname/$this")
+    // val (x, y) = getScore(resMap)
+    // pw.println(s"$tag: $x / $y")
+    // pw.close()
 
-    val jpw = getPrintWriter(filename)
-    jpw.println(resMap.asJson.spaces2SortKeys)
-    jpw.close()
+    val jpw = () //getPrintWriter(filename)
+    // jpw.println(resMap.asJson.spaces2SortKeys)
+    // jpw.close()
+    ()
   }
 
   // test name

@@ -88,7 +88,7 @@ case class Test262(
     name: String,
     targetTests: List[Test],
     log: Boolean = false,
-    pw: PrintWriter,
+    pw: Unit, // PrintWriter,
     removed: Iterable[(Test, ReasonPath)] = Nil,
     useProgress: Boolean = false,
     useErrorHandler: Boolean = true,
@@ -105,14 +105,16 @@ case class Test262(
           summary.notSupported.add(name, reasons)
         case _: TimeoutException =>
           if (log)
-            pw.println(s"[TIMEOUT] $name")
-            pw.flush
+            ()
+            // pw.println(s"[TIMEOUT] $name")
+            // pw.flush
           summary.timeout.add(name)
         case e: Throwable =>
           if (log)
-            pw.println(s"[FAIL   ] $name")
-            pw.println(e.getStackTrace.mkString(LINE_SEP))
-            pw.flush
+            ()
+            // pw.println(s"[FAIL   ] $name")
+            // pw.println(e.getStackTrace.mkString(LINE_SEP))
+            // pw.flush
           summary.fail.add(name, getMessage(e))
       else throw e,
     verbose = useProgress,
@@ -141,14 +143,14 @@ case class Test262(
     val (targetTests, removed) = testFilter(tests, withYet)
 
     // open log file
-    val logPW = getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
+    val logPW = () // getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
 
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
       name = "eval",
       targetTests = targetTests,
       log = log,
-      pw = logPW,
+      pw = (), // logPW,
       removed = removed,
       useProgress = useProgress,
       useErrorHandler = multiple,
@@ -166,7 +168,7 @@ case class Test262(
     logForTests(
       name = "eval",
       progressBar = progressBar,
-      pw = logPW,
+      pw = (), // logPW,
       postSummary = if (useCoverage) cov.toString else "",
       log = log && multiple,
     )(
@@ -188,7 +190,7 @@ case class Test262(
     )
 
     // close log file
-    logPW.close()
+    // logPW.close()
 
     progressBar.summary
   }
@@ -209,13 +211,13 @@ case class Test262(
     val (targetTests, removed) = testFilter(tests, withYet)
 
     // open log file
-    val logPW = getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
+    // val logPW = getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
 
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
       name = "parse",
       targetTests = targetTests,
-      pw = logPW,
+      pw = (),  //logPW,
       removed = removed,
       useProgress = useProgress,
       concurrent = concurrent,
@@ -225,7 +227,7 @@ case class Test262(
     logForTests(
       name = "parse",
       progressBar = progressBar,
-      pw = logPW,
+      pw = (), //logPW,
       log = log,
     )(
       // check parsing result with its corresponding code
@@ -237,7 +239,7 @@ case class Test262(
     )
 
     // close log file
-    logPW.close()
+    // logPW.close()
 
     progressBar.summary
   }
@@ -257,7 +259,7 @@ case class Test262(
     filename: String,
     log: Boolean = false,
     detail: Boolean = false,
-    logPW: Option[PrintWriter] = None,
+    logPW: Option[Unit], // Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
   ): State =
     val ((ast, code), _) = loadTest(filename)
@@ -285,7 +287,7 @@ case class Test262(
   private def logForTests(
     name: String,
     progressBar: ProgressBar[Test],
-    pw: PrintWriter,
+    pw: Unit, // PrintWriter,
     postSummary: => String = "",
     log: Boolean = false,
   )(

@@ -149,13 +149,15 @@ val AkkaVersion = "2.6.19"
 val AkkaHttpVersion = "10.2.8"
 
 // project root
-lazy val root = project
+lazy val esmeta = project
   .in(file("."))
+  .enablePlugins(ScalaJSPlugin)
   .settings(
     name := "esmeta",
 
     // libraries
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.5.7",
       "org.typelevel" %% "cats-core" % "2.12.0", // to derive recursive codecs
       "io.circe" %% "circe-core" % "0.14.1",
       "io.circe" %% "circe-generic" % "0.14.1",

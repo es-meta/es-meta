@@ -5,9 +5,11 @@ import esmeta.cfg.*
 import esmeta.ir.{Func => IRFunc, *}
 import esmeta.ir.util.AllocSiteSetter
 import scala.collection.mutable.{ListBuffer, Map => MMap}
+import scala.scalajs.js.annotation.JSExport
 
 /** CFG builder */
 object CFGBuilder:
+  @JSExport("apply")
   def apply(
     program: Program,
     log: Boolean = false,

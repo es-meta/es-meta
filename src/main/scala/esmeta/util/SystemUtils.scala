@@ -13,6 +13,9 @@ import scala.io.Source
 import scala.sys.process.*
 import scala.util.Try
 import io.circe.*, io.circe.syntax.*, io.circe.parser.*
+import cats.effect.{IO, Resource}
+import scala.io.{BufferedSource, Source}
+import cats.effect.unsafe.implicits.global
 
 /** file utilities */
 object SystemUtils {
@@ -21,7 +24,12 @@ object SystemUtils {
 
   /** file reader */
   def fileReader(filename: String): Reader =
-    Source.fromFile(filename, ENC).bufferedReader
+    // Source.fromFile(filename, ENC).bufferedReader
+    Resource
+      .fromAutoCloseable(IO(Source.fromFile(filename).bufferedReader))
+      .allocated // Acquires the resource
+      .map(_._1) // Extracts the BufferedReader
+      .unsafeRunSync() // Runs the IO and returns the BufferedReader directly
 
   /** file trees with filename */
   def walkTree(filename: String): Iterable[File] = walkTree(File(filename))
@@ -44,12 +52,12 @@ object SystemUtils {
   lazy val patchFilter = extFilter("patch")
 
   /** print writer */
-  def getPrintWriter(filename: String, append: Boolean = false): PrintWriter =
-    val file = File(filename)
-    val parent = file.getParent
-    if (parent != null) mkdir(parent)
-    val out = FileOutputStream(file, append)
-    PrintWriter(out)
+  // def getPrintWriter(filename: String, append: Boolean = false): PrintWriter =
+  //   val file = File(filename)
+  //   val parent = file.getParent
+  //   if (parent != null) mkdir(parent)
+  //   val out = FileOutputStream(file, append)
+  //   PrintWriter(out)
 
   /** dump given data to a file */
   def dumpFile(data: Any, filename: String): Unit =
@@ -57,9 +65,10 @@ object SystemUtils {
 
   /** dump given data to a file */
   def dumpFile(data: Any, filename: String, append: Boolean): Unit =
-    val nf = getPrintWriter(filename, append)
-    nf.print(data)
-    nf.close()
+    //   val nf = getPrintWriter(filename, append)
+    //   nf.print(data)
+    //   nf.close()
+    ()
 
   /** dump given data collection into a directory and show message */
   def dumpDir[T](
@@ -72,9 +81,10 @@ object SystemUtils {
     append: Boolean = false,
     silent: Boolean = false,
   ): Unit =
-    mkdir(dirname, remove)
-    for (x <- iterable) dumpFile(getData(x), s"$dirname/${getName(x)}", append)
-    println(s"- Dumped $name into `$dirname` .")
+    // mkdir(dirname, remove)
+    // for (x <- iterable) dumpFile(getData(x), s"$dirname/${getName(x)}", append)
+    // println(s"- Dumped $name into `$dirname` .")
+    ()
 
   /** dump given data into a file and show message */
   def dumpFile(
@@ -84,7 +94,7 @@ object SystemUtils {
     append: Boolean = false,
     silent: Boolean = false,
   ): Unit =
-    dumpFile(data, filename, append)
+    // dumpFile(data, filename, append)
     if (!silent) println(s"- Dumped $name into `$filename` .")
 
   /** dump given data in a JSON format */
@@ -98,7 +108,8 @@ object SystemUtils {
     noSpace: Boolean,
   )(using Encoder[T]): Unit =
     val json = data.asJson
-    dumpFile(if (noSpace) json.noSpaces else json.spaces2, filename, false)
+    // dumpFile(if (noSpace) json.noSpaces else json.spaces2, filename, false)
+    ()
 
   /** dump given data in a JSON format and show message */
   def dumpJson[T](
@@ -117,15 +128,21 @@ object SystemUtils {
 
   /** read file */
   def readFile(filename: String): String =
-    try {
-      val source = Source.fromFile(filename, ENC)
-      val str = source.mkString
-      source.close
-      str
-    } catch {
-      case e: Exception =>
-        println(s"Error reading file: ${e.getMessage}")
-        ""
+    def sourceResource: Resource[IO, BufferedSource] =
+      Resource.fromAutoCloseable(IO(Source.fromFile(filename)))
+    {
+      sourceResource.use(source => IO(source.mkString))
+    }.unsafeRunSync()
+
+  /** read JSON */
+  def readJsonContent[T](content: String)(implicit decoder: Decoder[T]): T =
+    parse(content) match {
+      case Left(err) => throw err
+      case Right(json) =>
+        json.as[T] match {
+          case Left(err) => throw err
+          case Right(v)  => v
+        }
     }
 
   /** read JSON */

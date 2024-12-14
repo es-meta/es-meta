@@ -59,14 +59,14 @@ class Stats(spec: Spec) {
         PassStat(completed == total),
         PassStat(completed, total),
       )
-      algo.elem.walkAncestor(
-        elem =>
-          val elemStat = map.getOrElse(elem, ElemStat())
-          map += (elem -> (elemStat + stat))
-        ,
-        (),
-        (a, b) => (),
-      )
+      // algo.elem.walkAncestor(
+      //   elem =>
+      //     val elemStat = map.getOrElse(elem, ElemStat())
+      //     map += (elem -> (elemStat + stat))
+      //   ,
+      //   (),
+      //   (a, b) => (),
+      // )
     }
 
     /** get summary of element */
@@ -92,14 +92,15 @@ class Stats(spec: Spec) {
       val yetStepStr =
         if printYet then
           // get algos in same emu-clause
-          val algos = spec.algorithms.filter(_.elem.getId == elem.id)
+          // val algos = spec.algorithms.filter(_.elem.getId == elem.id)
 
           // get yet steps
-          algos
+          /* algos
             .map(_.incompleteSteps)
             .flatten
             .map(newline(indent + 2) + _.toString(false))
-            .fold("")(_ + _)
+            .fold("")(_ + _) */
+            ""
         else ""
 
       // final result
@@ -111,9 +112,13 @@ class Stats(spec: Spec) {
 
     /** getString */
     def getAlgoString: String =
-      getString(spec.document.body, elem => elem.algo)
+      // XXX temp suppress
+      ""
+      // getString(spec.document.body, elem => elem.algo)
     def getStepString: String =
-      getString(spec.document.body, elem => elem.step, true)
+      // XXX temp suppress
+      ""
+      // getString(spec.document.body, elem => elem.step, true)
     private def getString(
       elem: Element,
       pstat: ElemStat => PassStat,

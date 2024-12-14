@@ -11,7 +11,18 @@ import scala.util.parsing.combinator.*
 import scala.util.parsing.input.*
 import scala.util.matching.Regex
 
+import scala.scalajs.js.annotation.*
+
+import esmeta.spec.util.JsonProtocol.given
+import esmeta.lang.util.JsonProtocol.given
+import esmeta.ty.*
+import esmeta.util.*
+import esmeta.util.BaseUtils.*
+import io.circe.*, io.circe.syntax.*, io.circe.generic.semiauto.*
+import scala.scalajs.js.annotation.JSExport
+
 /** ECMAScript parser */
+@JSExportAll
 case class ESParser(
   val grammar: Grammar,
   val debug: Boolean = false,
@@ -24,6 +35,7 @@ case class ESParser(
     * @param args
     *   boolean arguments
     */
+  @JSExport("apply")
   def apply(name: String, args: List[Boolean] = Nil): AstFrom =
     val parser = parsers(name)(args)
     new AstFrom {

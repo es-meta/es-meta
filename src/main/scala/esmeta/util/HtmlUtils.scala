@@ -9,14 +9,65 @@ import org.jsoup.select.*
 /** HTML utilities */
 object HtmlUtils {
 
+  val escapes = Map(
+    "\t"-> "&#9;",
+    "\n"-> "&#10;",
+    " " -> "&nbsp;",
+    "!" -> "&#33;",
+    "#" -> "&#35;",
+    "$" -> "&#36;",
+    "%" -> "&#37;",
+    "(" -> "&#40;",
+    ")" -> "&#41;",
+    "*" -> "&#42;",
+    "+" -> "&#43;",
+    "," -> "&#44;",
+    "-" -> "&#45;",
+    "." -> "&#46;",
+    "/" -> "&#47;",
+
+    ":" -> "&#58;",
+    ";" -> "&#59;",
+    "<"-> "&lt;",
+    "="-> "&#61;",
+    ">"-> "&gt;",
+    "?"-> "&#63;",
+    "@"-> "&#64;",
+
+    "&"-> "&amp;",
+    "\""-> "&quot;",
+    "'"-> "&#039;",
+    "["-> "&#91;",
+    "\\"-> "&#92;",
+    "]"-> "&#93;",
+    "^"-> "&#94;",
+    "_"-> "&#95;",
+    "`"-> "&#96;",
+    "{"-> "&#123;",
+    "|"-> "&#124;",
+    "}"-> "&#125;",
+    "~"-> "&#126;",
+
+  );
+
+  val reversed = escapes.map(_.swap)
+
   /** extensions for strings */
   extension (str: String) {
 
     /** revert entity name to character */
-    def unescapeHtml: String = StringEscapeUtils.unescapeHtml4(str)
-
+    def unescapeHtml: String =
+      // StringEscapeUtils.unescapeHtml4(str)
+      val pattern = reversed.keys.mkString("|").r
+      pattern.replaceAllIn(str, m => reversed(m.matched))
+      
+  
     /** revert character to entity name */
-    def escapeHtml: String = StringEscapeUtils.escapeHtml4(str)
+    def escapeHtml: String =
+      // StringEscapeUtils.escapeHtml4(str)
+      str.foldLeft("") { case (acc, (c)) =>
+        acc ++ escapes.getOrElse(c.toString, c.toString)
+      }
 
     /** escape ECMAScript file to pass it to shell */
     def escapeES: String = StringEscapeUtils.escapeXSI(str)

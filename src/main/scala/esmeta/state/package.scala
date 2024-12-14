@@ -67,8 +67,21 @@ val NUMBER_POS_INF = Number(Double.PositiveInfinity)
 val NUMBER_NEG_INF = Number(Double.NegativeInfinity)
 
 def trimString(x: String, isStarting: Boolean, esParser: ESParser): String =
+  // use scala-js compatiable
   val sb = new java.lang.StringBuilder
-  val arr = x.codePoints.toArray
+  // val arr = x.codePoints.toArray
+  val arr = {
+      val aux = Array.emptyIntArray
+      val index = 0 to x.codePointCount(0, x.length)
+      index.foreach(aux :+ x.codePointAt(_))
+      // for (int i = 0; i < str.lengt?h();) {
+      // int ch = str.codePointAt(i);
+      // do stuff with ch...
+      // i += Character.charCount(ch);
+    // }
+      
+      aux
+    }
   val cps = esParser.WhiteSpaceCPs ++ esParser.LineTerminatorCPs
   def find(i: Int, next: Int => Int): Int =
     if (i < 0 || i >= arr.length) i

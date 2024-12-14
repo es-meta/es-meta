@@ -9,7 +9,9 @@ import esmeta.util.BaseUtils.*
 import esmeta.util.Git
 import esmeta.util.HtmlUtils.*
 import esmeta.{error => ESMetaError, *}
-import org.jsoup.nodes.Document
+// import org.jsoup.nodes.Document
+
+// import scala.scalajs.js.annotation.*
 
 /** ECMAScript specifications (ECMA-262) */
 case class Spec(
@@ -21,7 +23,7 @@ case class Spec(
 ) extends SpecElem {
 
   /** HTML Document element */
-  var document: Document = Document("")
+  // var document: Document = Document("")
 
   /** ECMAScript parser */
   lazy val esParser: ESParser = ESParser(grammar)
@@ -75,9 +77,10 @@ case class Spec(
 
   /** get an algorithm by id attribute */
   def getAlgoById(id: String): Algorithm =
-    algorithms.filter(_.elem.getId == id) match
-      case algo :: Nil => algo
-      case _           => error(s"no algorithms found for $id")
+    ???
+  //   algorithms.filter(_.elem.getId == id) match
+  //     case algo :: Nil => algo
+  //     case _           => error(s"no algorithms found for $id")
 
   /** empty check */
   def isEmpty: Boolean =
