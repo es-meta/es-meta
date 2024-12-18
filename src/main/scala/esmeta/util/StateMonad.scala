@@ -60,4 +60,16 @@ class StateMonad[S] {
     iter.foldRight[Updater](st => st) {
       case (f, g) => st => g(f(st))
     }
+
+  def withState[T](f: S ?=> T): Result[T] =
+    for {
+      given S <- get
+      v = f
+    } yield v
+
+  def concretize[T](f: S ?=> Result[T]): Result[T] =
+    for {
+      given S <- get
+      v <- f
+    } yield v
 }

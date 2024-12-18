@@ -169,7 +169,7 @@ trait ReplDecl { self: Self =>
           case (CmdBreak.block, uid) => uid.toInt == node.id
           case _                     => false
         }
-      case np: NodePoint[_] if untilImprec && getResult(np).hasImprec =>
+      case np: NodePoint[_] if untilImprec && getState(np).hasImprec =>
         untilImprec = false; true
       case np @ NodePoint(_, node, _) =>
         breakpoints.exists {

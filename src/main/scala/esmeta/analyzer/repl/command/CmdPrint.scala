@@ -31,7 +31,7 @@ trait CmdPrintDecl { self: Self =>
           cp match
             case np: NodePoint[Node] =>
               given NodePoint[Node] = np
-              val st = getResult(np)
+              val st = getState(np)
               val (v, _) = transfer.transfer(Expr.from(str))(st)
               println(v.getString(st))
 

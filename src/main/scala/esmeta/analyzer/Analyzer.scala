@@ -53,11 +53,11 @@ abstract class Analyzer
   type AbsValue <: AbsValueLike
 
   /** lookup for node points */
-  def getResult(np: NodePoint[Node]): AbsState =
+  def getState(np: NodePoint[Node]): AbsState =
     npMap.getOrElse(np, AbsState.Bot)
 
   /** lookup for return points */
-  def getResult(rp: ReturnPoint): AbsRet =
+  def getState(rp: ReturnPoint): AbsRet =
     rpMap.getOrElse(rp, AbsRet.Bot)
 
   /** get string for result of control points */

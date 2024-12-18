@@ -38,12 +38,23 @@ trait TypeGuardDecl { self: TyChecker =>
 
     def has(x: SymBase): Boolean = map.values.exists(_.has(x))
 
-    def <=(that: TypeGuard): Boolean = that.map.forall { (kind, r) =>
-      this.map.get(kind) match
-        case Some(l) => l <= r
-        case None    => false
-    }
+    def <=(that: TypeGuard)(lty: ValueTy, rty: ValueTy): Boolean =
+      lty <= rty &&
+      that.map.forall { (kind, pred) =>
+        evaluate(lty)(kind.ty) <= pred
+      }
 
+    /** Join two type guards. Assertion: Type constraints should be not Top.
+      *
+      * @param that
+      *   the other type guard
+      * @param lty
+      *   the left-hand side upper type limit
+      * @param rty
+      *   the right-hand side upper type limit
+      * @return
+      *   the joined type guard
+      */
     def ||(that: TypeGuard)(lty: ValueTy, rty: ValueTy): TypeGuard =
       val (lkinds, rkinds) = (this.kinds, that.kinds)
       val kinds =
@@ -51,11 +62,11 @@ trait TypeGuardDecl { self: TyChecker =>
         rkinds.filter(k => (k.ty && lty).isBottom || lkinds.contains(k))
       TypeGuard((for {
         kind <- kinds.toList
-        pred = (this.get(kind), that.get(kind)) match
-          case (Some(l), Some(r)) => l || r
-          case (Some(l), None)    => l
-          case (None, Some(r))    => r
-          case _                  => TypeConstr()
+        ty = lty || rty
+        pred = (this.evaluate(ty)(kind.ty), that.evaluate(ty)(kind.ty)) match
+          case (l, r) if (lty && kind.ty).isBottom => r
+          case (l, r) if (rty && kind.ty).isBottom => l
+          case (l, r)                              => l || r
         if !pred.isTop
       } yield kind -> pred).toMap)
 
@@ -75,7 +86,7 @@ trait TypeGuardDecl { self: TyChecker =>
       *   symbolic predicate ensured when the abstract value is refined to `ty`
       */
     def evaluate(upperTy: ValueTy)(ty: ValueTy): TypeConstr =
-      if ((upperTy && ty).isBottom) TypeConstr()
+      if ((upperTy && ty).isBottom) TypeConstr.Bottom
       else {
         val preds = for {
           (kind, pred) <- map
@@ -84,6 +95,11 @@ trait TypeGuardDecl { self: TyChecker =>
         if (preds.nonEmpty) preds.reduce(_ && _)
         else TypeConstr()
       }
+
+    def withCur(using st: AbsState): TypeGuard =
+      TypeGuard(map.map {
+        case (kind, constr) => kind -> (constr && st.constr)
+      })
 
     override def toString: String = (new Appender >> this).toString
   }
@@ -124,6 +140,15 @@ trait TypeGuardDecl { self: TyChecker =>
       if (RefinementKind.set.contains(ty)) new RefinementKind(ty)
       else throw notSupported(s"Unsupported RefinementKind: $ty")
 
+    /** Returns a set of RefinementKind which is possible to be refined from the
+      * given type.
+      *
+      * @param givenTy
+      *   the given type
+      * @return
+      *   a set of RefinementKind, which are types that has a possibility to
+      *   overlap with the given type
+      */
     def from(givenTy: ValueTy): Set[RefinementKind] =
       RefinementKind.set
         .filter(ty => !(givenTy && ty).isBottom)
@@ -157,34 +182,45 @@ trait TypeGuardDecl { self: TyChecker =>
   case class TypeConstr(
     map: Map[SymBase, (ValueTy, Provenance)] = Map(),
     sexpr: Option[(SymExpr, Provenance)] = None,
+    isBottom: Boolean = false,
   ) {
     def isTop: Boolean = map.isEmpty && sexpr.isEmpty
     def nonTop: Boolean = !isTop
     def <=(that: TypeConstr): Boolean =
-      that.map.forall {
-        case (x, (rty, _)) =>
-          this.map.get(x).fold(false) { case (lty, _) => lty <= rty }
-      } && (this.sexpr == that.sexpr)
-    def ||(that: TypeConstr): TypeConstr = TypeConstr(
-      map = (for {
-        x <- (this.map.keySet intersect that.map.keySet).toList
-        (lty, lprov) = this.map(x)
-        (rty, rprov) = that.map(x)
-        ty = lty || rty
-        prov = lprov join rprov
-      } yield x -> (ty, prov)).toMap,
-      sexpr = this.sexpr || that.sexpr,
-    )
-    def &&(that: TypeConstr): TypeConstr = TypeConstr(
-      map = (for {
-        x <- (this.map.keySet ++ that.map.keySet).toList
-        (lty, lprov) = this.map.getOrElse(x, (AnyT, Provenance()))
-        (rty, rprov) = that.map.getOrElse(x, (AnyT, Provenance()))
-        ty = lty && rty
-        prov = lprov join rprov
-      } yield x -> (ty, prov)).toMap,
-      sexpr = this.sexpr && that.sexpr,
-    )
+      if (this.isBottom) true
+      else if (that.isBottom) false
+      else
+        that.map.forall {
+          case (x, (rty, _)) =>
+            this.map.get(x).fold(false) { case (lty, _) => lty <= rty }
+        } && (this.sexpr == that.sexpr)
+    def ||(that: TypeConstr): TypeConstr =
+      if (this.isBottom) that
+      else if (that.isBottom) this
+      else
+        TypeConstr(
+          map = (for {
+            x <- (this.map.keySet intersect that.map.keySet).toList
+            (lty, lprov) = this.map(x)
+            (rty, rprov) = that.map(x)
+            ty = lty || rty
+            prov = lprov join rprov
+          } yield x -> (ty, prov)).toMap,
+          sexpr = this.sexpr || that.sexpr,
+        )
+    def &&(that: TypeConstr): TypeConstr =
+      if (this.isBottom || that.isBottom) TypeConstr.Bottom
+      else
+        TypeConstr(
+          map = (for {
+            x <- (this.map.keySet ++ that.map.keySet).toList
+            (lty, lprov) = this.map.getOrElse(x, (AnyT, Provenance()))
+            (rty, rprov) = that.map.getOrElse(x, (AnyT, Provenance()))
+            ty = lty && rty
+            prov = lprov join rprov
+          } yield x -> (ty, prov)).toMap,
+          sexpr = this.sexpr && that.sexpr,
+        )
     def has(x: SymBase): Boolean =
       map.contains(x) || sexpr.fold(false) { case (sexpr, _) => sexpr.has(x) }
     def bases: Set[SymBase] =
@@ -201,6 +237,7 @@ trait TypeGuardDecl { self: TyChecker =>
         origTy = symEnv.getOrElse(x, BotT)
       } yield x -> (origTy && ty, prov),
       sexpr = None,
+      isBottom = isBottom,
     )
     def depth: Int =
       val provs = map.values.map(_._2).toList
@@ -209,6 +246,7 @@ trait TypeGuardDecl { self: TyChecker =>
   }
 
   object TypeConstr {
+    val Bottom: TypeConstr = TypeConstr(isBottom = true)
     def apply(pair: (SymExpr, Provenance)): TypeConstr =
       TypeConstr(sexpr = Some(pair))
     def apply(pairs: (SymBase, (ValueTy, Provenance))*): TypeConstr =
@@ -387,8 +425,12 @@ trait TypeGuardDecl { self: TyChecker =>
     given Rule[(ValueTy, Provenance)] =
       case (app, (ty, prov)) => app >> ty >> prov
     given Rule[Map[SymBase, (ValueTy, Provenance)]] = sortedMapRule(sep = ": ")
-    if (pred.map.nonEmpty) app >> pred.map
-    pred.sexpr.fold(app) { (sexpr, prov) => app >> sexpr >> prov }
+    if (pred.isBottom) app >> "⊥"
+    else if (pred.isTop) app >> "⊤"
+    else
+      app >> "(" >> pred.map >> ","
+      pred.sexpr.fold(app) { (sexpr, prov) => app >> sexpr >> prov }
+      app >> ")"
   given Rule[TypeGuard] = (app, guard) =>
     given Ordering[RefinementKind] = Ordering.by(_.toString)
     given Rule[RefinementKind] = (app, kind) => app >> kind.ty

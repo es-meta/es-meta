@@ -176,6 +176,7 @@ lazy val root = project
         .cross(CrossVersion.for3Use2_13),
       ("ch.megard" %% "akka-http-cors" % "1.1.2")
         .cross(CrossVersion.for3Use2_13), // cors
+      ("org.typelevel" %% "cats-core" % "2.12.0"),
     ),
 
     // Copy all managed dependencies to <build-root>/lib_managed/ This is

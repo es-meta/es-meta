@@ -50,10 +50,10 @@ class TyChecker(
   val transfer: AbsTransfer = new AbsTransfer
 
   /** check reachability of node points */
-  def reachable(np: NodePoint[Node]): Boolean = !getResult(np).isBottom
+  def reachable(np: NodePoint[Node]): Boolean = !getState(np).isBottom
 
   /** check reachability of return points */
-  def reachable(rp: ReturnPoint): Boolean = !getResult(rp).isBottom
+  def reachable(rp: ReturnPoint): Boolean = !getState(rp).isBottom
 
   /** get string for result of control points */
   def getString(
@@ -66,10 +66,10 @@ class TyChecker(
     val k = color.fold(cpStr)(setColor(_)(cpStr))
     cp match
       case np: NodePoint[_] =>
-        val st = getResult(np)
+        val st = getState(np)
         s"$k -> $st"
       case rp: ReturnPoint =>
-        val ret = getResult(rp)
+        val ret = getState(rp)
         s"$k -> $ret" + (
           if (detail)
             retEdges
@@ -254,8 +254,8 @@ class TyChecker(
   /** inferred type guards */
   def getTypeGuards: List[(Func, AbsValue)] = for {
     func <- cfg.funcs
-    entrySt = getResult(NodePoint(func, func.entry, emptyView))
-    AbsRet(value) = getResult(ReturnPoint(func, emptyView))
+    entrySt = getState(NodePoint(func, func.entry, emptyView))
+    AbsRet(value) = getState(ReturnPoint(func, emptyView))
     if value.hasTypeGuard(entrySt)
     guard = TypeGuard(for {
       (kind, pred) <- value.guard.map
@@ -287,7 +287,7 @@ class TyChecker(
   /** update internal map */
   def +=(pair: (NodePoint[Node], AbsState)): Unit =
     val (np, newSt) = pair
-    val oldSt = getResult(np)
+    val oldSt = getState(np)
     if (!oldSt.isBottom && useRepl) Repl.merged = true
     if (!newSt.hasBottom && !(newSt ⊑ oldSt))
       npMap += np -> (oldSt ⊔ newSt)
@@ -407,7 +407,7 @@ class TyChecker(
         app :> "   " >> func.headString
         val fname = func.name
         val entryNp = NodePoint(func, func.entry, emptyView)
-        val st = getResult(entryNp)
+        val st = getState(entryNp)
         given AbsState = st
         val newParams =
           for (p <- func.params) yield p.lhs.name -> st.get(p.lhs).ty

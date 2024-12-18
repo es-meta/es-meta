@@ -35,8 +35,9 @@ trait AbsStateDecl { self: TyChecker =>
             AbsState(_, llocals, lsymEnv, lpred),
             AbsState(_, rlocals, rsymEnv, rpred),
           ) =>
-        val TypeConstr(lmap, lexpr) = lpred
-        val TypeConstr(rmap, rexpr) = rpred
+        val TypeConstr(lmap, lexpr, lbot) = lpred
+        val TypeConstr(rmap, rexpr, rbot) = rpred
+        if (lbot && !rbot) return false
         llocals.forall { (x, lv) =>
           rlocals.get(x).fold(false) { rv =>
             AbsValue.orderHelper(lv, this, rv, that)
@@ -74,7 +75,13 @@ trait AbsStateDecl { self: TyChecker =>
         val newPred = l.constr || r.constr
         AbsState(true, newLocals, newSymEnv, newPred)
 
-    /** get imprecise bases compared with another state */
+    /** Get imprecise bases. A base is imprecise and should be killed if it is
+      * not present in the other state or exists but imprecise than the other
+      * state.
+      *
+      * @param that
+      * @return
+      */
     def getImprecBases(that: AbsState): Set[SymBase] =
       val locals = (for {
         (x, lv) <- this.locals

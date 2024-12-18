@@ -34,6 +34,9 @@ trait AbsValueDecl { self: TyChecker =>
     def ⊑(that: AbsValue)(using st: AbsState): Boolean =
       orderHelper(this, st, that, st)
 
+    def ⊑(that: AbsValue)(lst: AbsState, rst: AbsState): Boolean =
+      orderHelper(this, lst, that, rst)
+
     /** not partial order */
     def !⊑(that: AbsValue)(using AbsState): Boolean = !(this ⊑ that)
 
@@ -83,14 +86,16 @@ trait AbsValueDecl { self: TyChecker =>
       val inGuard = guard.bases
       inSymty ++ inGuard
 
-    /** get symbolic expression when it only has a symbolic expression */
-    // TODO: Erase this
-    // def getSymExpr: Option[SymExpr] = expr match
-    //   case One(expr) if lowerTy.isBottom => Some(expr)
-    //   case _                             => None
-
-    /** introduce a new type guard */
-    def getTypeGuard(using st: AbsState): TypeGuard = TypeGuard((for {
+    /** Generate a type guard based on the abstract state's constraint. Only the
+      * refinement kind that is meaningful within the abstract value is
+      * considered.
+      *
+      * @param st
+      *   abstract state
+      * @return
+      *   type guard only based on the abstract state's constraint
+      */
+    def genTypeGuard(using st: AbsState): TypeGuard = TypeGuard((for {
       kind <- RefinementKind.from(this.ty).toList
       pred = st.constr
       if pred.nonTop
@@ -446,30 +451,38 @@ trait AbsValueDecl { self: TyChecker =>
     ): Boolean =
       val AbsValue(lsymty, lguard) = l
       val AbsValue(rsymty, rguard) = r
-      (lsymty ⊑ rsymty)(lst, rst) && lguard <= rguard
+      (lsymty ⊑ rsymty)(lst, rst) && (lguard <= rguard)(
+        l.ty(using lst),
+        r.ty(using rst),
+      )
 
     def joinHelper(
       l: AbsValue,
       lst: AbsState,
       r: AbsValue,
       rst: AbsState,
-    ): AbsValue =
-      val AbsValue(lsymty, lguard) = l
-      val AbsValue(rsymty, rguard) = r
-      val luty = l.ty(using lst)
-      val ruty = r.ty(using rst)
-      val guard = (lguard || rguard)(luty, ruty)
-      AbsValue((lsymty ⊔ rsymty)(lst, rst), guard)
+    ): AbsValue = (l, r) match
+      case (l, r) if l.isBottom        => r
+      case (l, r) if r.isBottom        => l
+      case (l, r) if (l ⊑ r)(lst, rst) => r
+      case (l, r) if (r ⊑ l)(rst, lst) => l
+      case (AbsValue(lsymty, lguard), AbsValue(rsymty, rguard)) =>
+        val luty = l.ty(using lst)
+        val ruty = r.ty(using rst)
+        val guard = (lguard || rguard)(luty, ruty)
+        AbsValue((lsymty ⊔ rsymty)(lst, rst), guard)
 
     def meetHelper(
       l: AbsValue,
       lst: AbsState,
       r: AbsValue,
       rst: AbsState,
-    ): AbsValue =
-      val AbsValue(lsymty, lguard) = l
-      val AbsValue(rsymty, rguard) = r
-      AbsValue((lsymty ⊓ rsymty)(lst, rst), lguard && rguard)
+    ): AbsValue = (l, r) match
+      case (l, r) if l.isBottom || r.isBottom => Bot
+      case (l, r) if (l ⊑ r)(lst, rst)        => l
+      case (l, r) if (r ⊑ l)(rst, lst)        => r
+      case (AbsValue(lsymty, lguard), AbsValue(rsymty, rguard)) =>
+        AbsValue((lsymty ⊓ rsymty)(lst, rst), lguard && rguard)
 
     /** appender */
     given rule: Rule[AbsValue] = (app, elem) =>
