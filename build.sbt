@@ -17,6 +17,9 @@ ThisBuild / scalacOptions := Seq(
   "-deprecation", // emit warning and location for usages of deprecated APIs
   "-feature", // emit warning for features that should be imported explicitly
   "-unchecked", // enable warnings where generated code depends on assumptions
+  // disable import suggestions related bug: https://github.com/scala/scala3/issues/12876
+  "-Ximport-suggestion-timeout",
+  "0",
 )
 
 // Java options

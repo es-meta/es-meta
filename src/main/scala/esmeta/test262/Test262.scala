@@ -106,15 +106,15 @@ case class Test262(
         case _: TimeoutException =>
           if (log)
             ()
-            // pw.println(s"[TIMEOUT] $name")
-            // pw.flush
+          // pw.println(s"[TIMEOUT] $name")
+          // pw.flush
           summary.timeout.add(name)
         case e: Throwable =>
           if (log)
             ()
-            // pw.println(s"[FAIL   ] $name")
-            // pw.println(e.getStackTrace.mkString(LINE_SEP))
-            // pw.flush
+          // pw.println(s"[FAIL   ] $name")
+          // pw.println(e.getStackTrace.mkString(LINE_SEP))
+          // pw.flush
           summary.fail.add(name, getMessage(e))
       else throw e,
     verbose = useProgress,
@@ -217,7 +217,7 @@ case class Test262(
     val progressBar = getProgressBar(
       name = "parse",
       targetTests = targetTests,
-      pw = (),  //logPW,
+      pw = (), // logPW,
       removed = removed,
       useProgress = useProgress,
       concurrent = concurrent,
@@ -227,7 +227,7 @@ case class Test262(
     logForTests(
       name = "parse",
       progressBar = progressBar,
-      pw = (), //logPW,
+      pw = (), // logPW,
       log = log,
     )(
       // check parsing result with its corresponding code
@@ -279,7 +279,7 @@ case class Test262(
       st = st,
       log = log,
       detail = detail,
-      logPW = logPW,
+      logPW = None, // logPW,
       timeLimit = timeLimit,
     )
 

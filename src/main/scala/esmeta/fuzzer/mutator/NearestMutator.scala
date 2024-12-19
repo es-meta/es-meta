@@ -2,7 +2,7 @@ package esmeta.fuzzer.mutator
 
 import esmeta.es.*
 import esmeta.state.*
-import esmeta.spec.Grammar
+import esmeta.spec.{Grammar, Spec}
 import esmeta.fuzzer.synthesizer.*
 import esmeta.es.util.*
 import esmeta.es.util.Coverage.*
@@ -15,6 +15,8 @@ class NearestMutator(using cfg: CFG)(
 ) extends Mutator {
   import NearestMutator.*
   import Mutator.*
+
+  given Spec = cfg.spec
 
   val randomMutator = RandomMutator()
 

@@ -10,6 +10,7 @@ import esmeta.ir.{Func => IRFunc, *}
 import esmeta.parser.{ESParser, ESValueParser}
 import esmeta.state.*
 import esmeta.spec.{
+  Spec,
   SyntaxDirectedOperationHead,
   AbstractOperationHead,
   BuiltinHead,
@@ -411,6 +412,7 @@ class Interpreter(
   // ---------------------------------------------------------------------------
   /** control flow graphs */
   private given cfg: CFG = st.cfg
+  private given Spec = st.cfg.spec
 
   /** type model */
   private def tyModel = cfg.tyModel
@@ -429,7 +431,9 @@ class Interpreter(
     )
 
   /** cache to get syntax-directed operation (SDO) */
-  private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
+  private val getSdo =
+    given Map[String, Func] = cfg.fnameMap
+    cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
 
   // create a new context
   protected def createContext(

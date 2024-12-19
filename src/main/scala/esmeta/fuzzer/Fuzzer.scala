@@ -117,9 +117,9 @@ class Fuzzer(
     // finish logging
     if (log) {
       logging
-      summaryTsv.close
-      selStatTsv.close
-      mutStatTsv.close
+      // summaryTsv.close
+      // selStatTsv.close
+      // mutStatTsv.close
     }
 
     cov
@@ -341,7 +341,7 @@ class Fuzzer(
     header ++= Vector("target-conds(#)")
     if (kFs > 0) header ++= Vector(s"sens-target-conds(#)")
     addRow(header)
-  private def genStatHeader(keys: List[String], nf: PrintWriter) =
+  private def genStatHeader(keys: List[String], nf: Unit) =
     var header1 = Vector("iter(#)")
     var header2 = Vector("-")
     keys.foreach(k => {
@@ -355,7 +355,7 @@ class Fuzzer(
   private def dumpStat(
     keys: List[String],
     stat: MMap[String, Counter],
-    tsv: PrintWriter,
+    tsv: Unit, // PrintWriter,
   ): Unit =
     var row = Vector[Any](iter)
     keys.foreach(k => {
@@ -386,16 +386,16 @@ class Fuzzer(
     dumpStat(selector.names, selectorStat, selStatTsv)
     dumpStat(mutator.names, mutatorStat, mutStatTsv)
 
-  private def addRow(data: Iterable[Any], nf: PrintWriter = summaryTsv): Unit =
+  private def addRow(data: Iterable[Any], nf: Unit = summaryTsv): Unit =
     val row = data.mkString("\t")
     if (stdOut) println(row)
-    nf.println(row)
-    nf.flush
+    // nf.println(row)
+    // nf.flush
 
-  private lazy val summaryTsv: PrintWriter =
-    getPrintWriter(s"$logDir/summary.tsv")
-  private lazy val selStatTsv: PrintWriter =
-    getPrintWriter(s"$logDir/selector-stat.tsv")
-  private lazy val mutStatTsv: PrintWriter =
-    getPrintWriter(s"$logDir/mutation-stat.tsv")
+  private lazy val summaryTsv: Unit = ()
+    // getPrintWriter(s"$logDir/summary.tsv")
+  private lazy val selStatTsv: Unit = ()
+    // getPrintWriter(s"$logDir/selector-stat.tsv")
+  private lazy val mutStatTsv: Unit = ()
+    // getPrintWriter(s"$logDir/mutation-stat.tsv")
 }

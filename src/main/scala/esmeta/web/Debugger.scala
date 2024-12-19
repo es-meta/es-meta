@@ -16,7 +16,7 @@ import scala.scalajs.js.annotation.*
 object Debugger:
   def initDebugger(cfg: CFG, sourceText: String): Debugger =
     val cachedAst = cfg.scriptParser.from(sourceText)
-    Debugger(Initialize(cfg, sourceText, Some(cachedAst)))
+    Debugger(cfg.init.from(sourceText, cachedAst))
 
 /** debugger extension of IR interpreter */
 @JSExportTopLevel("Debugger")
