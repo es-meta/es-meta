@@ -408,7 +408,7 @@ class Debugger(st: State) extends Interpreter(st, log = true) {
     (st.context :: st.callStack.map(_.context)).map(getInfo(_))
 
   /** context information */
-  def ctxtInfo(cid: Int) =
+  def ctxtInfo(cid: Int, alternative: Option[Map[String, Option[String]]] = None) =
     def paramInfo(p: Param) = (
       p.lhs.name,
       p.optional,
@@ -427,7 +427,9 @@ class Debugger(st: State) extends Interpreter(st, log = true) {
       case _: ExitCursor       => (-1, true)
     val func = ctxt.func
     val irFunc = func.irFunc
-    val code = irFunc.algo.map(_.code).getOrElse("")
+    val code = alternative match
+      case Some(map) => map.getOrElse(irFunc.name, None).getOrElse("")
+      case None => irFunc.algo.map(_.code).getOrElse("")
     (
       func.id,
       irFunc.kind.ordinal,
