@@ -271,7 +271,7 @@ case class Test262(
     ast: Ast,
     log: Boolean = false,
     detail: Boolean = false,
-    logPW: Option[PrintWriter] = None,
+    logPW: Option[Unit] = None,
     timeLimit: Option[Int] = None,
   ): State =
     val st = cfg.init.from(code, ast)
