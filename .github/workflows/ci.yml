@@ -12,6 +12,16 @@ jobs:
       with:
         submodules: true
 
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+        cache: sbt
+
+    - name: Setup SBT
+      uses: sbt/setup-sbt@v1
+
     - name: Fetch all tags from ecma262
       env:
         ESMETA_HOME: ${{ github.workspace }}
@@ -37,6 +47,16 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+        cache: sbt
+
+    - name: Setup SBT
+      uses: sbt/setup-sbt@v1
 
     - name: Check code format
       run: sbt formatCheck
