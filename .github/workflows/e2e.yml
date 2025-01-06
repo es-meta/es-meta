@@ -8,10 +8,22 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         submodules: true
+
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+        cache: sbt
+
+    - name: Setup SBT
+      uses: sbt/setup-sbt@v1
+
     - name: Run e2e tests
       run: |
         sbt assembly
@@ -19,6 +31,7 @@ jobs:
         npm ci
         npx playwright install chromium --with-deps
         npx playwright test --project=chromium
+
     - uses: actions/upload-artifact@v4
       if: always()
       with:
