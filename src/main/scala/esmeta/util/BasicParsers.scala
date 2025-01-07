@@ -77,8 +77,52 @@ trait BasicParsers extends JavaTokenParsers {
     case l ~ c ~ o => Pos(l, c, o)
   }
   lazy val loc: Parser[Loc] = {
-    lazy val steps = "(" ~> repsep(int, ".") <~ ")"
-    pos ~ ("-" ~> pos) ~ steps ^^ { case s ~ e ~ ss => Loc(s, e, ss) }
+
+    lazy val alphaInt: Parser[Int] = {
+      lazy val lower = "[a-z]".r
+      lazy val upper = "[A-Z]".r
+
+      lower ^^ {
+        _.charAt(0).toInt - ('a'.toInt) + 1
+      } | upper ^^ {
+        _.charAt(0).toInt - ('A'.toInt) + 1
+      }
+    }
+
+    lazy val romanInt: Parser[Int] = {
+      lazy val chars = "[ivxlcdmIVXLCDM]+".r
+      chars ^? RomanNumeralDecoder.apply.unlift
+    }
+
+    // step $stepString, rangeString
+    // (step 3.e, 9:10-177)
+
+    lazy val triple =
+      lazy val fromRoman: Parser[List[Int]] =
+        romanInt ~ opt("." ~> fromInt) ^^ {
+          case i ~ is => i :: (is.getOrElse(Nil))
+        }
+      lazy val fromAlpha: Parser[List[Int]] =
+        alphaInt ~ opt("." ~> fromRoman) ^^ {
+          case i ~ is => i :: (is.getOrElse(Nil))
+        }
+      lazy val fromInt: Parser[List[Int]] =
+        int ~ opt("." ~> fromAlpha) ^^ {
+          case i ~ is => i :: (is.getOrElse(Nil))
+        }
+      fromInt
+
+    lazy val stepTriple = ("step" ~> triple <~ ",")
+
+    lazy val range: Parser[(Pos, Pos)] = pos ~ ("-" ~> pos) ^^ {
+      case s ~ e => (s, e)
+    }
+
+    lazy val steps = "(" ~> opt(stepTriple) ~ range <~ ")" ^^ {
+      case ss ~ (s -> e) => Loc(s, e, steps = ss.getOrElse(Nil))
+    }
+
+    steps
   }
 
   // ---------------------------------------------------------------------------
@@ -92,7 +136,7 @@ trait BasicParsers extends JavaTokenParsers {
         p(trimmed) match
           case s @ Success(res, rest) =>
             Success(
-              res.setLoc(trimmed, rest, List()),
+              res.setLoc(trimmed, rest),
               rest,
             )
           case ns: NoSuccess => ns
