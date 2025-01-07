@@ -28,8 +28,7 @@ class Stringifier(
       case None          => basicAstRule(app, ast)
 
   // span information
-  given locRule: Rule[Loc] = (app, loc) =>
-    app >> "{" >> loc.start.toString >> "-" >> loc.end.toString >> "}"
+  given locRule: Rule[Loc] = _ >> _.toString
 
   lazy val grammarAstRule: Rule[(Grammar, Ast)] = (app, pair) =>
     val (grammar, origAst) = pair

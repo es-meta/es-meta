@@ -1,19 +1,22 @@
 package esmeta.util
 
-import esmeta.LINE_SEP
-import scala.annotation.alpha
+import esmeta.util.Appender.*
 
-/** A trait for objects that have a location in spec.html */
+/** A trait for objects that have a source location */
 trait Locational {
 
   /** source location */
   var loc: Option[Loc] = None
 
   /** set source location with start and end positions and steps */
-  def setLoc(start: Pos, end: Pos, steps: List[Int]): this.type =
-    setLoc(Some(Loc(start, end, steps)))
+  def setLoc(
+    start: Pos,
+    end: Pos,
+    filename: Option[String] = None,
+    steps: List[Int] = Nil,
+  ): this.type = setLoc(Some(Loc(start, end, filename, steps)))
 
-  /** set source location */
+  /** set source location if not already set */
   def setLoc(locOpt: Option[Loc]): this.type =
     if (loc.isEmpty) loc = locOpt
     this
@@ -22,21 +25,21 @@ trait Locational {
 /** source locations in algorithms
   *
   * @example
-  *   3:2-4:7 (1.2.2) for `Loc(Pos(3,2), Pos(4,7), List(1,2,2,))`
+  *   (step 1.ii.c, 3:2-4:7) for `Loc(Pos(3,2), Pos(4,7), None, List(1,2,3))`
+  *   (3:2-4:7 @ path) for `Loc(Pos(3,2), Pos(4,7), Some("path"), Nil)`
   */
 case class Loc(
   var start: Pos,
   var end: Pos,
-  var steps: List[Int],
+  var filename: Option[String] = None,
+  var steps: List[Int] = Nil,
 ) {
 
-  /** string getter */
+  /** get the string from the original string */
   def getString(str: String): String = str.substring(start.offset, end.offset)
 
   /** get range string */
-  def rangeString: String =
-    val (Pos(sl, sc, _), Pos(el, ec, _)) = (start, end)
-    if (sl == el) s"$sl:$sc-$ec" else s"$sl:$sc - $el:$ec"
+  def rangeString: String = s"$start-$end"
 
   /** get step string */
   def stepString: String =
@@ -48,14 +51,19 @@ case class Loc(
 
   /** conversion to string */
   override def toString: String =
-    if (stepString == "") s"($rangeString)"
-    else s"(step $stepString, $rangeString)"
+    val app = new Appender
+    app >> "("
+    if (steps.nonEmpty) app >> "step " >> stepString >> ", "
+    app >> rangeString
+    filename.map(app >> " @ " >> _)
+    app >> ")"
+    app.toString
 }
 
 /** positions in algorithms
   *
   * @example
-  *   3:2 for `Pos(3,2)`
+  *   3:2(5) for `Pos(3,2,5)` -- line 3, column 2, offset 5
   */
 case class Pos(
   var line: Int,
