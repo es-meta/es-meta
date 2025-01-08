@@ -94,13 +94,7 @@ case class ESParser(
     syn: Syntactic,
     astStart: Ast,
     astEnd: Ast,
-  ): Syntactic =
-    for {
-      Loc(start, _, spath, _) <- astStart.loc
-      Loc(_, end, epath, _) <- astEnd.loc
-      filename = if (spath == epath) spath else None
-    } syn.setLoc(start, end, filename)
-    syn
+  ): Syntactic = syn.setLoc(astStart mergeLoc astEnd)
 
   // get a parser
   private def getParser(prod: Production): ESParser[Ast] = memo(args =>
