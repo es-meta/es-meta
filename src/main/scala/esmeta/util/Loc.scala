@@ -20,6 +20,13 @@ trait Locational {
   def setLoc(locOpt: Option[Loc]): this.type =
     if (loc.isEmpty) loc = locOpt
     this
+
+  /** merge source locations */
+  def mergeLoc(that: Locational): Option[Loc] = for {
+    lloc <- this.loc
+    rloc <- that.loc
+    loc <- lloc merge rloc
+  } yield loc
 }
 
 /** source locations in algorithms
@@ -48,6 +55,13 @@ case class Loc(
       case 1 => AlphabetNumeral(step)
       case 2 => RomanNumeral(step, lower = true)
     ).mkString(".")
+
+  /** merge locations */
+  def merge(that: Loc): Option[Loc] =
+    val Loc(start, _, lname, lsteps) = this
+    val Loc(_, end, rname, rsteps) = that
+    if (lname != rname || lsteps != rsteps) return None
+    Some(Loc(start, end, lname, lsteps))
 
   /** conversion to string */
   override def toString: String =
