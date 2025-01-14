@@ -11,7 +11,7 @@ _esmeta_completions() {
   local cur prev opts lastc informats outformats datafiles
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  cmdList="help fuzz test262-test web"
+  cmdList="help extract compile build-cfg fuzz test262-test web"
   globalOpt="-silent -error -status -time -test262dir"
   helpOpt=""
   extractOpt="-extract:target -extract:log -extract:eval -extract:repl"
@@ -34,6 +34,18 @@ _esmeta_completions() {
       case "${cmd}" in
         help)
           COMPREPLY=($(compgen -W "${globalOpt} ${helpOpt}"))
+          return 0
+          ;;
+        extract)
+          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt}"))
+          return 0
+          ;;
+        compile)
+          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt}"))
+          return 0
+          ;;
+        build-cfg)
+          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt}"))
           return 0
           ;;
         fuzz)
