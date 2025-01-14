@@ -11,23 +11,15 @@ _esmeta_completions() {
   local cur prev opts lastc informats outformats datafiles
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  cmdList="help extract compile build-cfg tycheck parse eval web construct test262-test fuzz inject mutate dump web-from-dump"
+  cmdList="help fuzz test262-test web"
   globalOpt="-silent -error -status -time -test262dir"
   helpOpt=""
   extractOpt="-extract:target -extract:log -extract:eval -extract:repl"
   compileOpt="-compile:log -compile:log-with-loc -compile:no-opt"
   buildcfgOpt="-build-cfg:log -build-cfg:dot -build-cfg:pdf"
-  tycheckOpt="-tycheck:target -tycheck:repl -tycheck:repl-continue -tycheck:ignore -tycheck:update-ignore -tycheck:log -tycheck:detail-log -tycheck:type-sens -tycheck:infer-guard"
-  parseOpt="-parse:debug"
-  evalOpt="-eval:timeout -eval:multiple -eval:log -eval:detail-log"
-  webOpt="-web:port"
-  constructOpt=""
-  test262testOpt="-test262-test:target -test262-test:features -test262-test:progress -test262-test:coverage -test262-test:k-fs -test262-test:cp -test262-test:total-coverage -test262-test:timeout -test262-test:with-yet -test262-test:log -test262-test:detail-log -test262-test:concurrent"
   fuzzOpt="-fuzz:log -fuzz:log-interval -fuzz:out -fuzz:debug -fuzz:timeout -fuzz:trial -fuzz:duration -fuzz:seed -fuzz:cp -fuzz:init -fuzz:k-fs"
-  injectOpt="-inject:defs -inject:out -inject:log"
-  mutateOpt="-mutate:out -mutate:mutator -mutate:untilValid"
-  dumpOpt=""
-  webfromdumpOpt="-web-from-dump:port"
+  test262testOpt="-test262-test:target -test262-test:features -test262-test:progress -test262-test:coverage -test262-test:k-fs -test262-test:cp -test262-test:total-coverage -test262-test:timeout -test262-test:with-yet -test262-test:log -test262-test:detail-log -test262-test:concurrent"
+  webOpt="-web:port"
   # completion for commands
   case "${COMP_CWORD}" in
     1)
@@ -44,60 +36,16 @@ _esmeta_completions() {
           COMPREPLY=($(compgen -W "${globalOpt} ${helpOpt}"))
           return 0
           ;;
-        extract)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt}"))
-          return 0
-          ;;
-        compile)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt}"))
-          return 0
-          ;;
-        build-cfg)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt}"))
-          return 0
-          ;;
-        tycheck)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${tycheckOpt}"))
-          return 0
-          ;;
-        parse)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${parseOpt}"))
-          return 0
-          ;;
-        eval)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${evalOpt}"))
-          return 0
-          ;;
-        web)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${webOpt}"))
-          return 0
-          ;;
-        construct)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${constructOpt}"))
+        fuzz)
+          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${fuzzOpt}"))
           return 0
           ;;
         test262-test)
           COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${test262testOpt}"))
           return 0
           ;;
-        fuzz)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${fuzzOpt}"))
-          return 0
-          ;;
-        inject)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${injectOpt}"))
-          return 0
-          ;;
-        mutate)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${mutateOpt}"))
-          return 0
-          ;;
-        dump)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${dumpOpt}"))
-          return 0
-          ;;
-        web-from-dump)
-          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${dumpOpt} ${webfromdumpOpt}"))
+        web)
+          COMPREPLY=($(compgen -W "${globalOpt} ${extractOpt} ${compileOpt} ${buildcfgOpt} ${webOpt}"))
           return 0
           ;;
       esac

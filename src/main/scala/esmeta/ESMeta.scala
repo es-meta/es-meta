@@ -63,25 +63,11 @@ object ESMeta extends Git(BASE_DIR) {
   /** commands */
   val commands: List[Command[_]] = List(
     CmdHelp,
-    // Mechanized Specification Extraction
-    CmdExtract,
-    CmdCompile,
-    CmdBuildCFG,
-    // Analysis of ECMA-262
-    CmdTyCheck,
-    // Interpreter & Double Debugger for ECMAScript
-    CmdParse,
-    CmdEval,
-    CmdWeb,
-    CmdConstruct,
-    // Tester for Test262 (ECMAScript Test Suite)
-    CmdTest262Test,
-    // ECMAScript Fuzzer
+    // Program Collector
     CmdFuzz,
-    CmdInject,
-    CmdMutate,
-    CmdDump,
-    CmdWebFromDump,
+    CmdTest262Test,
+    // Double Debugger
+    CmdWeb,
   )
   val cmdMap = commands.foldLeft[Map[String, Command[_]]](Map()) {
     case (map, cmd) => map + (cmd.name -> cmd)
@@ -94,21 +80,11 @@ object ESMeta extends Git(BASE_DIR) {
     Extract,
     Compile,
     BuildCFG,
-    // Analysis of ECMA-262
-    TyCheck,
-    // Interpreter & Double Debugger for ECMAScript
-    Parse,
-    Eval,
-    Web,
-    Construct,
-    // Tester for Test262 (ECMAScript Test Suite)
-    Test262Test,
-    // ECMAScript Fuzzer
+    // Program Collector
     Fuzz,
-    Inject,
-    Mutate,
-    Dump,
-    WebFromDump,
+    Test262Test,
+    // Double Debugger
+    Web,
   )
 
   /** command options */

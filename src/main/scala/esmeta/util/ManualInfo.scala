@@ -1,7 +1,6 @@
 package esmeta.util
 
 import esmeta.MANUALS_DIR
-import esmeta.analyzer.tychecker.TyChecker.Ignore
 import esmeta.spec.Spec
 import esmeta.test262.util.ManualConfig
 import esmeta.ty.TyModel
@@ -11,9 +10,6 @@ import java.io.File
 
 /** manual information helpers */
 object ManualInfo {
-
-  /** A list of algorithms to ignore for tycheck */
-  lazy val tycheckIgnore: Ignore = Ignore(s"$MANUALS_DIR/tycheck-ignore.json")
 
   /** manual algorithm files */
   lazy val algoFiles: List[String] = getFileNames(algoFilter)

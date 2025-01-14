@@ -67,96 +67,20 @@ case object CmdHelp extends Command("help", CmdBase >> Help) {
   override val needTarget = false
 }
 
+lazy val CmdBuildCFG = CmdBase >> Extract >> Compile >> BuildCFG
+
 // -----------------------------------------------------------------------------
-// Mechanized Specification Extraction
+// Program Collector
 // -----------------------------------------------------------------------------
-/** `extract` command */
-case object CmdExtract extends Command("extract", CmdBase >> Extract) {
-  val help = "extracts specification model from ECMA-262 (spec.html)."
+/** `fuzz` command */
+case object CmdFuzz extends Command("fuzz", CmdBuildCFG >> Fuzz) {
+  val help = "generate ECMAScript programs for fuzzing."
   val examples = List(
-    "esmeta extract                           // extract current version.",
-    "esmeta extract -extract:target=es2022    // extract es2022 version.",
-    "esmeta extract -extract:target=868fe7a   // extract 868fe7a hash version.",
+    "esmeta fuzz                 # generate ECMAScript programs for fuzzing",
+    "esmeta fuzz -fuzz:log       # fuzz in the logging mode.",
   )
 }
 
-/** `compile` command */
-case object CmdCompile extends Command("compile", CmdExtract >> Compile) {
-  val help = "compiles a specification to an IR program."
-  val examples = List(
-    "esmeta compile                        # compile spec to IR program.",
-    "esmeta compile -extract:target=es2022 # compile es2022 spec to IR program",
-    "esmeta compile -compile:no-opt        # compile with out IR optimization",
-  )
-}
-
-/** `build-cfg` command */
-case object CmdBuildCFG extends Command("build-cfg", CmdCompile >> BuildCFG) {
-  val help = "builds a control-flow graph (CFG) from an IR program."
-  val examples = List(
-    "esmeta build-cfg                          # build CFG for spec.",
-    "esmeta build-cfg -extract:target=es2022   # build CFG for es2022 spec.",
-  )
-}
-
-// -----------------------------------------------------------------------------
-// Analysis of ECMA-262
-// -----------------------------------------------------------------------------
-/** `tycheck` command */
-case object CmdTyCheck extends Command("tycheck", CmdBuildCFG >> TyCheck) {
-  val help = "performs a type checking of ECMA-262."
-  val examples = List(
-    "esmeta tycheck                              # type check for spec.",
-    "esmeta tycheck -tycheck:target='.*ToString' # type check with targets",
-    "esmeta tycheck -extract:target=es2022       # type check for es2022 spec.",
-  )
-}
-
-// -----------------------------------------------------------------------------
-// Interpreter & Double Debugger for ECMAScript
-// -----------------------------------------------------------------------------
-/** `parse` command */
-case object CmdParse extends Command("parse", CmdExtract >> Parse) {
-  val help = "parses an ECMAScript file."
-  val examples = List(
-    "esmeta parse a.js                         # parse a.js file.",
-    "esmeta parse a.js -extract:target=es2022  # parse with es2022 spec.",
-    "esmeta parse a.js -parse:debug            # parse in the debugging mode.",
-  )
-  override val targetName = "<js>+"
-}
-
-/** `eval` command */
-case object CmdEval extends Command("eval", CmdBuildCFG >> Eval) {
-  val help = "evaluates an ECMAScript file."
-  val examples = List(
-    "esmeta eval a.js                         # eval a.js file.",
-    "esmeta eval a.js -extract:target=es2022  # eval with es2022 spec.",
-    "esmeta eval a.js -eval:log               # eval in the logging mode.",
-  )
-  override val targetName = "<js>+"
-}
-
-/** `web` command */
-case object CmdWeb extends Command("web", CmdBuildCFG >> Web) {
-  val help = "starts a web server for an ECMAScript double debugger."
-  val examples = List(
-    "esmeta web    # turn on the server (Use with `esmeta-debugger-client`).",
-  )
-}
-
-/** `construct` command */
-case object CmdConstruct
-  extends Command("construct", CmdBuildCFG >> Construct) {
-  val help = "starts a web server for an ECMAScript double debugger."
-  val examples = List(
-    "esmeta construct    # builds file for ECMAVisualizer.",
-  )
-}
-
-// -----------------------------------------------------------------------------
-// Tester for Test262 (ECMAScript Test Suite)
-// -----------------------------------------------------------------------------
 /** `test262-test` command */
 case object CmdTest262Test
   extends Command("test262-test", CmdBuildCFG >> Test262Test) {
@@ -170,50 +94,22 @@ case object CmdTest262Test
   override val needTarget = false
 }
 
+/** `construct` command */
+case object CmdConstruct
+  extends Command("construct", CmdBuildCFG >> Construct) {
+  val help = "starts a web server for an ECMAScript double debugger."
+  val examples = List(
+    "esmeta construct    # builds file for ECMAVisualizer.",
+  )
+}
+
 // -----------------------------------------------------------------------------
-// ECMAScript Fuzzer
+// Double Debugger
 // -----------------------------------------------------------------------------
-/** `fuzz` command */
-case object CmdFuzz extends Command("fuzz", CmdBuildCFG >> Fuzz) {
-  val help = "generate ECMAScript programs for fuzzing."
+/** `web` command */
+case object CmdWeb extends Command("web", CmdBuildCFG >> Web) {
+  val help = "starts a web server for an ECMAScript double debugger."
   val examples = List(
-    "esmeta fuzz                 # generate ECMAScript programs for fuzzing",
-    "esmeta fuzz -fuzz:log       # fuzz in the logging mode.",
-  )
-}
-
-/** `inject` command */
-case object CmdInject extends Command("inject", CmdBuildCFG >> Inject) {
-  val help = "injects assertions to check final state of an ECMAScript file."
-  val examples = List(
-    "esmeta inject a.js                               # inject assertions.",
-    "esmeta inject a.js -inject:defs -inject:out=b.js # dump with definitions.",
-  )
-  override val targetName = "<js>+"
-}
-
-/** `mutate` command */
-case object CmdMutate extends Command("mutate", CmdBuildCFG >> Mutate) {
-  def help = "mutates an ECMAScript program."
-  val examples = List(
-    "esmeta mutate a.js                           # mutate ECMAScript program.",
-    "esmeta mutate a.js -mutate:out=b.js          # dump the mutated program.",
-    "esmeta mutate a.js -mutate:mutator=random    # use random mutator.",
-  )
-}
-
-/** debugger related command */
-case object CmdDump extends Command("dump", CmdBuildCFG >> Dump) {
-  def help = "dump some esmeta data to json."
-  val examples = List(
-    "esmeta dump                          # dump data to data.json",
-  )
-}
-
-case object CmdWebFromDump
-  extends Command("web-from-dump", CmdDump >> WebFromDump) {
-  def help = "dump some esmeta data to json."
-  val examples = List(
-    "esmeta web-from-dump",
+    "esmeta web    # turn on the server (Use with `esmeta-debugger-client`).",
   )
 }
