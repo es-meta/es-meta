@@ -7,3 +7,6 @@
 [submodule "client"]
 	path = client
 	url = https://github.com/es-meta/esmeta-debugger-client.git
+[submodule "visualizer"]
+	path = visualizer
+	url = https://github.com/ku-plrg/ecma-visualizer.git
