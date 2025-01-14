@@ -67,7 +67,36 @@ case object CmdHelp extends Command("help", CmdBase >> Help) {
   override val needTarget = false
 }
 
-lazy val CmdBuildCFG = CmdBase >> Extract >> Compile >> BuildCFG
+// -----------------------------------------------------------------------------
+// Mechanized Specification Extraction
+// -----------------------------------------------------------------------------
+/** `extract` command */
+case object CmdExtract extends Command("extract", CmdBase >> Extract) {
+  val help = "extracts specification model from ECMA-262 (spec.html)."
+  val examples = List(
+    "esmeta extract                           // extract current version.",
+    "esmeta extract -extract:target=es2024    // extract es2024 version.",
+    "esmeta extract -extract:target=868fe7a   // extract 868fe7a hash version.",
+  )
+}
+
+/** `compile` command */
+case object CmdCompile extends Command("compile", CmdExtract >> Compile) {
+  val help = "compiles a specification to an IR program."
+  val examples = List(
+    "esmeta compile                        # compile spec to IR program.",
+    "esmeta compile -extract:target=es2024 # compile es2024 spec to IR program",
+  )
+}
+
+/** `build-cfg` command */
+case object CmdBuildCFG extends Command("build-cfg", CmdCompile >> BuildCFG) {
+  val help = "builds a control-flow graph (CFG) from an IR program."
+  val examples = List(
+    "esmeta build-cfg                          # build CFG for spec.",
+    "esmeta build-cfg -extract:target=es2024   # build CFG for es2024 spec.",
+  )
+}
 
 // -----------------------------------------------------------------------------
 // Program Collector

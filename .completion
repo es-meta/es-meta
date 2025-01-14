@@ -15,7 +15,7 @@ _esmeta_completions() {
   globalOpt="-silent -error -status -time -test262dir"
   helpOpt=""
   extractOpt="-extract:target -extract:log -extract:eval -extract:repl"
-  compileOpt="-compile:log -compile:log-with-loc -compile:no-opt"
+  compileOpt="-compile:log -compile:log-with-loc"
   buildcfgOpt="-build-cfg:log -build-cfg:dot -build-cfg:pdf"
   fuzzOpt="-fuzz:log -fuzz:log-interval -fuzz:out -fuzz:debug -fuzz:timeout -fuzz:trial -fuzz:duration -fuzz:seed -fuzz:cp -fuzz:init -fuzz:k-fs"
   test262testOpt="-test262-test:target -test262-test:features -test262-test:progress -test262-test:coverage -test262-test:k-fs -test262-test:cp -test262-test:total-coverage -test262-test:timeout -test262-test:with-yet -test262-test:log -test262-test:detail-log -test262-test:concurrent"

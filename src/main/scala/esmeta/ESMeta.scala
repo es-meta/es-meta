@@ -63,6 +63,10 @@ object ESMeta extends Git(BASE_DIR) {
   /** commands */
   val commands: List[Command[_]] = List(
     CmdHelp,
+    // Mechanized Specification Extraction
+    CmdExtract,
+    CmdCompile,
+    CmdBuildCFG,
     // Program Collector
     CmdFuzz,
     CmdTest262Test,
