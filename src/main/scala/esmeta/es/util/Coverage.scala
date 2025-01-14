@@ -2,7 +2,6 @@ package esmeta.es.util
 
 import esmeta.LINE_SEP
 import esmeta.cfg.*
-import esmeta.injector.*
 import esmeta.interpreter.*
 import esmeta.ir.{Expr, EParse, EBool}
 import esmeta.es.*

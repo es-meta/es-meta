@@ -1,7 +1,6 @@
 package esmeta.es
 
 import esmeta.ESMetaTest
-import esmeta.analyzer.*
 import esmeta.cfgBuilder.CFGBuilder
 import esmeta.compiler.Compiler
 import esmeta.es.util.*
