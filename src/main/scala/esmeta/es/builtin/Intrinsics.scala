@@ -14,12 +14,20 @@ case class Intrinsics(cfg: CFG) {
   private def spec = cfg.program.spec
   given CFG = cfg
 
+  // XXX remove after update to ES2025
+  lazy val isES2024 = cfg.spec.version.exists(
+    _.hash == "0b24a049c11fe0604b1c929772e7cbd671b78492",
+  )
+  def getGeneratorPrototypeName(async: String, postfix: String): String =
+    if (isES2024) s"${async}GeneratorFunction.prototype.prototype$postfix"
+    else s"${async}GeneratorPrototype$postfix"
+
   /** get map for heap */
   lazy val map: Map[Addr, Obj] = {
     var _map = Map[Addr, Obj]()
 
-    // add intrinsic objects
-    intrinsics.foreach {
+    // add builtin objects
+    builtins.foreach {
       case (name, Struct(typeName, imap, nmap))
           if !(yets contains name.split("\\.").head) =>
         // base object
@@ -35,6 +43,13 @@ case class Intrinsics(cfg: CFG) {
       case _ =>
     }
 
+    // add symbols
+    symbols.foreach { symField =>
+      val addr = symbolAddr(symField)
+      val obj = recordObj("Symbol")("Description" -> Str(symbolName(symField)))
+      _map += addr -> obj
+    }
+
     // not yet objects
     yets.foreach { (name, _) => _map += (intrAddr(name) -> YetObj(name, name)) }
 
@@ -48,13 +63,22 @@ case class Intrinsics(cfg: CFG) {
       addr = intrAddr(x)
       case (obj: RecordObj) <- map.get(addr)
       ty =
-        if (obj.map contains "Construct") ConstructorT
+        if (obj.tname == "Symbol") SymbolT
+        else if (obj.map contains "Construct") ConstructorT
         else if (obj.map contains "Call") FunctionT
         else ObjectT
     } yield x -> ty).toMap ++ yets
     xs.map { case (x, ty) => s"%$x%" -> ty }
 
-  val names: Set[String] = intrinsics.keySet ++ yets.keySet
+  lazy val names: Set[String] =
+    builtins.keySet ++
+    symbols.map("Symbol." + _) ++
+    yets.keySet
+  private val pattern = "%Symbol.([^%]+)%".r
+  lazy val symbols: List[String] = (for {
+    row <- spec.tables(WELL_KNOWN_SYMBOLS).rows
+    symbolField <- row.headOption.collect { case pattern(s) => s }
+  } yield symbolField)
 
   /** get intrinsic map */
   val obj: MapObj = MapObj(names.toList.map(x => Str(s"%$x%") -> intrAddr(x)))
@@ -65,7 +89,7 @@ case class Intrinsics(cfg: CFG) {
 
   // intrinsics
   // https://tc39.es/ecma262/#sec-ecmascript-standard-built-in-objects
-  private lazy val intrinsics: Map[String, Struct] = errors ++ Map(
+  private lazy val builtins: Map[String, Struct] = errors ++ Map(
     "print" -> Struct(
       typeName = "BuiltinFunctionObject",
       imap = List(
@@ -704,7 +728,15 @@ case class Intrinsics(cfg: CFG) {
         "@@toStringTag" -> DataProperty(Str("Map"), F, F, T),
       ),
     ),
+    // XXX REMOVE after update to ES2025
     "IteratorPrototype" -> Struct(
+      typeName = "OrdinaryObject",
+      imap = List(
+        "Extensible" -> Bool(true),
+        "Prototype" -> intrAddr("Object.prototype"),
+      ),
+    ),
+    "Iterator.prototype" -> Struct(
       typeName = "OrdinaryObject",
       imap = List(
         "Extensible" -> Bool(true),
@@ -772,7 +804,7 @@ case class Intrinsics(cfg: CFG) {
       nmap = List(
         "constructor" -> DataProperty(intrAddr("GeneratorFunction"), F, F, T),
         "prototype" -> DataProperty(
-          intrAddr("GeneratorFunction.prototype.prototype"),
+          intrAddr(getGeneratorPrototypeName("", "")),
           F,
           F,
           T,
@@ -803,7 +835,7 @@ case class Intrinsics(cfg: CFG) {
         DataProperty(intrAddr("AsyncGeneratorFunction"), F, F, T),
         "prototype" ->
         DataProperty(
-          intrAddr("AsyncGeneratorFunction.prototype.prototype"),
+          intrAddr(getGeneratorPrototypeName("Async", "")),
           F,
           F,
           T,
@@ -812,7 +844,7 @@ case class Intrinsics(cfg: CFG) {
       ),
     ),
     // Generator.prototype == GeneratorFunction.prototype.prototype
-    "GeneratorFunction.prototype.prototype" -> Struct(
+    getGeneratorPrototypeName("", "") -> Struct(
       typeName = "OrdinaryObject",
       imap = List(
         "Extensible" -> Bool(true),
@@ -823,7 +855,7 @@ case class Intrinsics(cfg: CFG) {
         DataProperty(intrAddr("GeneratorFunction.prototype"), F, F, T),
         // XXX need to be documented
         "next" -> DataProperty(
-          intrAddr("GeneratorFunction.prototype.prototype.next"),
+          intrAddr(getGeneratorPrototypeName("", ".next")),
           T,
           F,
           T,
@@ -832,7 +864,7 @@ case class Intrinsics(cfg: CFG) {
       ),
     ),
     // AsyncGenerator.prototype == AsyncGeneratorFunction.prototype.prototype
-    "AsyncGeneratorFunction.prototype.prototype" -> Struct(
+    getGeneratorPrototypeName("Async", "") -> Struct(
       typeName = "OrdinaryObject",
       imap = List(
         "Extensible" -> Bool(true),
@@ -924,7 +956,7 @@ case class Intrinsics(cfg: CFG) {
     ),
   )
 
-  // error constructors
+  // error objects
   private def errList: List[String] = List(
     "EvalError",
     "RangeError",

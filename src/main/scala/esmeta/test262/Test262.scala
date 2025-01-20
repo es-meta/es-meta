@@ -129,6 +129,7 @@ case class Test262(
     useCoverage: Boolean = false,
     timeLimit: Option[Int] = None, // default: no limit
     concurrent: CP = CP.Single,
+    tyCheck: Boolean = false,
     verbose: Boolean = false,
   ): Summary = {
     // extract tests from paths
@@ -174,7 +175,14 @@ case class Test262(
         val filename = test.path
         val st =
           if (!useCoverage)
-            evalFile(filename, log && !multiple, detail, Some(logPW), timeLimit)
+            evalFile(
+              filename,
+              log && !multiple,
+              detail,
+              Some(logPW),
+              timeLimit,
+              tyCheck,
+            )
           else {
             val (ast, code) = loadTest(filename)
             cov.runAndCheck(Script(code, filename), ast)._1
@@ -258,9 +266,10 @@ case class Test262(
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
+    tyCheck: Boolean = false,
   ): State =
     val (ast, code) = loadTest(filename)
-    eval(code, ast, log, detail, logPW, timeLimit)
+    eval(code, ast, log, detail, logPW, timeLimit, tyCheck)
 
   // eval ECMAScript code
   private def eval(
@@ -270,6 +279,7 @@ case class Test262(
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
+    tyCheck: Boolean = false,
   ): State =
     val st = cfg.init.from(code, ast)
     Interpreter(
@@ -278,6 +288,7 @@ case class Test262(
       detail = detail,
       logPW = logPW,
       timeLimit = timeLimit,
+      tyCheck = tyCheck,
     )
 
   // logging mode for tests
