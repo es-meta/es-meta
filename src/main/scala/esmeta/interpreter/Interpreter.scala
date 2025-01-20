@@ -32,6 +32,7 @@ class Interpreter(
   val detail: Boolean = false,
   val logPW: Option[PrintWriter] = None,
   val timeLimit: Option[Int] = None,
+  val tyCheck: Boolean = false,
 ) {
   import Interpreter.*
 
@@ -129,7 +130,16 @@ class Interpreter(
       val addr = eval(list).asAddr
       st.context.locals += lhs -> st.pop(addr, front)
     case ret @ IReturn(expr) =>
-      st.context.retVal = Some(ret, eval(expr))
+      val retVal = eval(expr)
+      if (tyCheck) {
+        val retTy = st.context.func.irFunc.retTy.ty
+        if (retTy.isDefined && !retTy.contains(retVal, st)) {
+          println(s"[ReturnTypeMismatch] ${st.context.func.irFunc.name}")
+          println(s"- Expected type: ${retTy}")
+          println(s"- Actual value : ${retVal}")
+        }
+      }
+      st.context.retVal = Some(ret, retVal)
     case IAssert(expr) =>
       optional(eval(expr)) match
         case None             => /* skip not yet compiled assertions */
@@ -366,6 +376,14 @@ class Interpreter(
           case _       => throw RemainingArgs(args)
       case (param :: pl, arg :: al) =>
         map += param.lhs -> arg
+        if (tyCheck) {
+          val paramTy = param.ty.ty
+          if (paramTy.isDefined && !paramTy.contains(arg, st)) {
+            println(s"[ParamTypeMismatch] ${func.irFunc.name}")
+            println(s"- Expected type: ${paramTy} (param: ${param.lhs})")
+            println(s"- Actual value : ${arg}")
+          }
+        }
         aux(pl, al)
     }
     aux(params, args)
@@ -467,7 +485,8 @@ object Interpreter {
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-  ): State = new Interpreter(st, log, detail, logPW, timeLimit).result
+    tyCheck: Boolean = false,
+  ): State = new Interpreter(st, log, detail, logPW, timeLimit, tyCheck).result
 
   /** transition for lexical SDO */
   def eval(lex: Lexical, sdoName: String): Value = {

@@ -5,6 +5,7 @@ import esmeta.cfg.CFG
 import esmeta.state.*
 import esmeta.ty.*
 
+// XXX REMOVE after update to ES2025
 /** model for symbols */
 case class Symbol(cfg: CFG) {
   private def spec = cfg.program.spec
