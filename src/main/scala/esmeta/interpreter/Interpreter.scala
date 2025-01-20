@@ -136,7 +136,7 @@ class Interpreter(
         if (retTy.isDefined && !retTy.contains(retVal, st)) {
           println(s"[ReturnTypeMismatch] ${st.context.func.irFunc.name}")
           println(s"- Expected type: ${retTy}")
-          println(s"- Actual value : ${retVal}")
+          println(s"- Actual value : ${inspect(retVal, st)}")
         }
       }
       st.context.retVal = Some(ret, retVal)
@@ -381,7 +381,7 @@ class Interpreter(
           if (paramTy.isDefined && !paramTy.contains(arg, st)) {
             println(s"[ParamTypeMismatch] ${func.irFunc.name}")
             println(s"- Expected type: ${paramTy} (param: ${param.lhs})")
-            println(s"- Actual value : ${arg}")
+            println(s"- Actual value : ${inspect(arg, st)}")
           }
         }
         aux(pl, al)
@@ -475,6 +475,11 @@ class Interpreter(
           prevCallPath + call,
         )
   }
+
+  // heap inspector
+  private def inspect(v: Value, st: State): String = v match
+    case addr: Addr => st(addr).toString
+    case value      => value.toString
 }
 
 /** IR interpreter with a CFG */
