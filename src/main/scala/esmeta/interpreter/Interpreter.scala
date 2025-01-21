@@ -450,7 +450,7 @@ class Interpreter(
   private lazy val pw: PrintWriter =
     logPW.getOrElse(getPrintWriter(s"$EVAL_LOG_DIR/log"))
 
-  /** mismatches while runtime type checking */
+  /** mismatches while dynamic type checking */
   case class TypeMismatch(
     tag: String, // "ParamTypeMismatch" or "ReturnTypeMismatch"
     algo: String,

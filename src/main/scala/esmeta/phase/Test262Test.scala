@@ -115,7 +115,7 @@ case object Test262Test extends Phase[CFG, Summary] {
     (
       "type-check",
       BoolOption(_.tyCheck = _),
-      "test with runtime type checking.",
+      "test with dynamic type checking.",
     ),
   )
   case class Config(

@@ -61,7 +61,7 @@ case object Eval extends Phase[CFG, State] {
     (
       "type-check",
       BoolOption(_.tyCheck = _),
-      "perform runtime type checking.",
+      "perform dynamic type checking.",
     ),
   )
   case class Config(
