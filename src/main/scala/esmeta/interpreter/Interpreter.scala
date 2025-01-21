@@ -131,9 +131,9 @@ class Interpreter(
       st.context.locals += lhs -> st.pop(addr, front)
     case ret @ IReturn(expr) =>
       val retVal = eval(expr)
-      if (tyCheck) {
-        val retTy = st.context.func.irFunc.retTy.ty
-        if (retTy.isDefined && !retTy.contains(retVal, st)) {
+      val retTy = st.context.func.irFunc.retTy.ty
+      if (tyCheck && retTy.isDefined) {
+        if (!retTy.contains(retVal, st)) {
           println(s"[ReturnTypeMismatch] ${st.context.func.irFunc.name}")
           println(s"- Expected type: ${retTy}")
           println(s"- Actual value : ${inspect(retVal, st)}")
@@ -376,9 +376,10 @@ class Interpreter(
           case _       => throw RemainingArgs(args)
       case (param :: pl, arg :: al) =>
         map += param.lhs -> arg
-        if (tyCheck) {
-          val paramTy = param.ty.ty
-          if (paramTy.isDefined && !paramTy.contains(arg, st)) {
+        val paramTy = param.ty.ty
+        if (tyCheck && paramTy.isDefined) {
+          val thisMethodCall = func.isMethod && params.indexOf(param) == 0
+          if (!paramTy.contains(arg, st) && !thisMethodCall) {
             println(s"[ParamTypeMismatch] ${func.irFunc.name}")
             println(s"- Expected type: ${paramTy} (param: ${param.lhs})")
             println(s"- Actual value : ${inspect(arg, st)}")
