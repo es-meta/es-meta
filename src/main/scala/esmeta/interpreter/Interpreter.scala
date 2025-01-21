@@ -22,7 +22,7 @@ import java.io.PrintWriter
 import java.math.MathContext.DECIMAL128
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
-import scala.collection.mutable.{Map => MMap}
+import scala.collection.mutable.{Map => MMap, Set => MSet}
 import scala.math.{BigInt => SBigInt}
 
 /** extensible helper of IR interpreter with a CFG */
@@ -45,6 +45,14 @@ class Interpreter(
   /** final state */
   lazy val result: State =
     while (step) {}
+    if (tyCheck && mismatches.nonEmpty)
+      for (mismatch <- mismatches) {
+        println(LINE_SEP)
+        println(s"[${mismatch.tag}] ${mismatch.algo}")
+        if (mismatch.param.isDefined) println(s"- param: ${mismatch.param.get}")
+        if (mismatch.source.isDefined) println(s"--- ${mismatch.source.get}")
+      }
+      println(LINE_SEP)
     if (log)
       pw.println(st)
       pw.close
@@ -134,9 +142,12 @@ class Interpreter(
       val retTy = st.context.func.irFunc.retTy.ty
       if (tyCheck && retTy.isDefined) {
         if (!retTy.contains(retVal, st)) {
-          println(s"[ReturnTypeMismatch] ${st.context.func.irFunc.name}")
-          println(s"- Expected type: ${retTy}")
-          println(s"- Actual value : ${inspect(retVal, st)}")
+          mismatches += TypeMismatch(
+            "ReturnTypeMismatch",
+            st.context.func.irFunc.name,
+            None,
+            st.filename,
+          )
         }
       }
       st.context.retVal = Some(ret, retVal)
@@ -380,9 +391,12 @@ class Interpreter(
         if (tyCheck && paramTy.isDefined) {
           val thisMethodCall = func.isMethod && params.indexOf(param) == 0
           if (!paramTy.contains(arg, st) && !thisMethodCall) {
-            println(s"[ParamTypeMismatch] ${func.irFunc.name}")
-            println(s"- Expected type: ${paramTy} (param: ${param.lhs})")
-            println(s"- Actual value : ${inspect(arg, st)}")
+            mismatches += TypeMismatch(
+              "ParamTypeMismatch",
+              func.irFunc.name,
+              Some(param.lhs.name),
+              st.filename,
+            )
           }
         }
         aux(pl, al)
@@ -434,6 +448,15 @@ class Interpreter(
   /** logging */
   private lazy val pw: PrintWriter =
     logPW.getOrElse(getPrintWriter(s"$EVAL_LOG_DIR/log"))
+
+  /** mismatches while runtime type checking */
+  case class TypeMismatch(
+    tag: String, // "ParamTypeMismatch" or "ReturnTypeMismatch"
+    algo: String,
+    param: Option[String], // Defined if tag is "ParamTypeMismatch"
+    source: Option[String],
+  )
+  private val mismatches: MSet[TypeMismatch] = MSet()
 
   /** cache to get syntax-directed operation (SDO) */
   private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
