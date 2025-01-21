@@ -1,6 +1,5 @@
 package esmeta.interpreter
 
-import esmeta.*
 import esmeta.TEST_MODE
 import esmeta.cfg.*
 import esmeta.error.*
@@ -23,7 +22,7 @@ import java.io.PrintWriter
 import java.math.MathContext.DECIMAL128
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
-import scala.collection.mutable.{Map => MMap, Set => MSet}
+import scala.collection.mutable.{Map => MMap}
 import scala.math.{BigInt => SBigInt}
 
 /** extensible helper of IR interpreter with a CFG */
@@ -37,6 +36,9 @@ class Interpreter(
 ) {
   import Interpreter.*
 
+  /** base state */
+  val baseSt: State = st.copied
+
   /** initial time */
   lazy val startTime: Long = System.currentTimeMillis
 
@@ -46,7 +48,10 @@ class Interpreter(
   /** final state */
   lazy val result: State =
     while (step) {}
-    if (tyCheck && mismatches.nonEmpty)
+    if (tyCheck)
+      val dtc = new TypeChecker(baseSt)
+      while (dtc.step) {}
+      val mismatches = dtc.mismatches
       for (mismatch <- mismatches) {
         println(LINE_SEP)
         println(s"[${mismatch.tag}] ${mismatch.algo}")
@@ -139,19 +144,7 @@ class Interpreter(
       val addr = eval(list).asAddr
       st.context.locals += lhs -> st.pop(addr, front)
     case ret @ IReturn(expr) =>
-      val retVal = eval(expr)
-      val retTy = st.context.func.irFunc.retTy.ty
-      if (tyCheck && retTy.isDefined) {
-        if (!retTy.contains(retVal, st)) {
-          mismatches += TypeMismatch(
-            "ReturnTypeMismatch",
-            st.context.func.irFunc.name,
-            None,
-            getSource(st),
-          )
-        }
-      }
-      st.context.retVal = Some(ret, retVal)
+      st.context.retVal = Some(ret, eval(expr))
     case IAssert(expr) =>
       optional(eval(expr)) match
         case None             => /* skip not yet compiled assertions */
@@ -388,18 +381,6 @@ class Interpreter(
           case _       => throw RemainingArgs(args)
       case (param :: pl, arg :: al) =>
         map += param.lhs -> arg
-        val paramTy = param.ty.ty
-        if (tyCheck && paramTy.isDefined) {
-          val thisMethodCall = func.isMethod && params.indexOf(param) == 0
-          if (!paramTy.contains(arg, st) && !thisMethodCall) {
-            mismatches += TypeMismatch(
-              "ParamTypeMismatch",
-              func.irFunc.name,
-              Some(param.lhs.name),
-              getSource(st),
-            )
-          }
-        }
         aux(pl, al)
     }
     aux(params, args)
@@ -450,24 +431,6 @@ class Interpreter(
   private lazy val pw: PrintWriter =
     logPW.getOrElse(getPrintWriter(s"$EVAL_LOG_DIR/log"))
 
-  /** mismatches while dynamic type checking */
-  case class TypeMismatch(
-    tag: String, // "ParamTypeMismatch" or "ReturnTypeMismatch"
-    algo: String,
-    param: Option[String], // Defined if tag is "ParamTypeMismatch"
-    source: Option[String],
-  )
-  private val mismatches: MSet[TypeMismatch] = MSet()
-
-  /** get source of the program point */
-  private def getSource(st: State): Option[String] = for {
-    ast <- st.context.astOpt.orElse(
-      st.callStack.view.flatMap(_.context.astOpt).headOption,
-    )
-    loc <- ast.loc
-    filename <- loc.filename
-  } yield filename.stripPrefix(CUR_DIR).stripPrefix("/")
-
   /** cache to get syntax-directed operation (SDO) */
   private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
 
@@ -509,11 +472,6 @@ class Interpreter(
           prevCallPath + call,
         )
   }
-
-  // heap inspector
-  private def inspect(v: Value, st: State): String = v match
-    case addr: Addr => st(addr).toString
-    case value      => value.toString
 }
 
 /** IR interpreter with a CFG */
