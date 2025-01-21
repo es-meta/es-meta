@@ -146,7 +146,7 @@ class Interpreter(
             "ReturnTypeMismatch",
             st.context.func.irFunc.name,
             None,
-            st.filename,
+            getSource(st),
           )
         }
       }
@@ -395,7 +395,7 @@ class Interpreter(
               "ParamTypeMismatch",
               func.irFunc.name,
               Some(param.lhs.name),
-              st.filename,
+              getSource(st),
             )
           }
         }
@@ -457,6 +457,15 @@ class Interpreter(
     source: Option[String],
   )
   private val mismatches: MSet[TypeMismatch] = MSet()
+
+  /** get source of the program point */
+  private def getSource(st: State): Option[String] = for {
+    ast <- st.context.astOpt.orElse(
+      st.callStack.view.flatMap(_.context.astOpt).headOption,
+    )
+    loc <- ast.loc
+    filename <- loc.filename
+  } yield filename
 
   /** cache to get syntax-directed operation (SDO) */
   private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
