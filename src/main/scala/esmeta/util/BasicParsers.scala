@@ -6,6 +6,7 @@ import java.io.*
 import java.math.MathContext.UNLIMITED
 import java.nio.charset.Charset
 import scala.util.parsing.combinator.JavaTokenParsers
+import scala.annotation.alpha
 
 /** basic parsers */
 trait BasicParsers extends JavaTokenParsers {
@@ -36,7 +37,7 @@ trait BasicParsers extends JavaTokenParsers {
     parseBy(parser)(str)
 
   // string literal
-  lazy val string = ("\"[\u0000-\u000F]\"".r | stringLiteral) ^^ {
+  lazy val string = ("\"[\u0000-\u000F]\"".r ||| stringLiteral) ^^ {
     case s =>
       StringContext processEscapes s.substring(1, s.length - 1)
   }
@@ -73,9 +74,46 @@ trait BasicParsers extends JavaTokenParsers {
   }
 
   // locations
-  lazy val pos: Parser[Pos] = int ~ (":" ~> int) ~ ("(" ~> int <~ ")") ^^ {
-    case l ~ c ~ o => Pos(l, c, o)
+  lazy val pos: Parser[Pos] = {
+    int ~ (":" ~> int) ~ ("(" ~> int <~ ")") ^^ {
+      case l ~ c ~ o => Pos(l, c, o)
+    }
   }
+  object RomanNumeralDecoder extends BasicParsers {
+
+    lazy val _1000 = "M" ^^^ 1000
+    lazy val _900 = "CM" ^^^ 900
+    lazy val _500 = "D" ^^^ 500
+    lazy val _400 = "CD" ^^^ 400
+    lazy val _100 = "C" ^^^ 100
+    lazy val _90 = "XC" ^^^ 90
+    lazy val _50 = "L" ^^^ 50
+    lazy val _40 = "XL" ^^^ 40
+    lazy val _10 = "X" ^^^ 10
+    lazy val _9 = "IX" ^^^ 9
+    lazy val _5 = "V" ^^^ 5
+    lazy val _4 = "IV" ^^^ 4
+    lazy val _1 = "I" ^^^ 1
+
+    lazy val numeral: Parser[Int] =
+      (
+        (_1000 ~ numeral) | (_900 ~ numeral) | (_500 ~ numeral) |
+        (_400 ~ numeral) | (_100 ~ numeral) | (_90 ~ numeral) |
+        (_50 ~ numeral) | (_40 ~ numeral) | (_10 ~ numeral) |
+        (_9 ~ numeral) | (_5 ~ numeral) | (_4 ~ numeral) |
+        (_1 ~ numeral) | success(0)
+      ) ^^ {
+        case x: Int => x
+        case a ~ b  => a + b
+      }
+
+    def apply(str: String): Option[Int] =
+      parseAll(numeral, str.toUpperCase()) match {
+        case Success(result, _) => Some(result)
+        case _                  => None
+      }
+  }
+
   lazy val loc: Parser[Loc] = {
 
     lazy val alphaInt: Parser[Int] = {
