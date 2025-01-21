@@ -1,5 +1,6 @@
 package esmeta.interpreter
 
+import esmeta.*
 import esmeta.TEST_MODE
 import esmeta.cfg.*
 import esmeta.error.*
@@ -465,7 +466,7 @@ class Interpreter(
     )
     loc <- ast.loc
     filename <- loc.filename
-  } yield filename
+  } yield filename.stripPrefix(CUR_DIR).stripPrefix("/")
 
   /** cache to get syntax-directed operation (SDO) */
   private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
