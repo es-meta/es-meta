@@ -1,52 +1,42 @@
 package esmeta.util
 
-import esmeta.util.Appender.*
+import esmeta.LINE_SEP
+import scala.annotation.alpha
 
-/** A trait for objects that have a source location */
+/** A trait for objects that have a location in spec.html */
 trait Locational {
 
   /** source location */
   var loc: Option[Loc] = None
 
   /** set source location with start and end positions and steps */
-  def setLoc(
-    start: Pos,
-    end: Pos,
-    filename: Option[String] = None,
-    steps: List[Int] = Nil,
-  ): this.type = setLoc(Some(Loc(start, end, filename, steps)))
+  def setLoc(start: Pos, end: Pos, steps: List[Int]): this.type =
+    setLoc(Some(Loc(start, end, steps)))
 
-  /** set source location if not already set */
+  /** set source location */
   def setLoc(locOpt: Option[Loc]): this.type =
     if (loc.isEmpty) loc = locOpt
     this
-
-  /** merge source locations */
-  def mergeLoc(that: Locational): Option[Loc] = for {
-    lloc <- this.loc
-    rloc <- that.loc
-    loc <- lloc merge rloc
-  } yield loc
 }
 
 /** source locations in algorithms
   *
   * @example
-  *   (step 1.ii.c, 3:2-4:7) for `Loc(Pos(3,2), Pos(4,7), None, List(1,2,3))`
-  *   (3:2-4:7 @ path) for `Loc(Pos(3,2), Pos(4,7), Some("path"), Nil)`
+  *   3:2-4:7 (1.2.2) for `Loc(Pos(3,2), Pos(4,7), List(1,2,2,))`
   */
 case class Loc(
   var start: Pos,
   var end: Pos,
-  var filename: Option[String] = None,
-  var steps: List[Int] = Nil,
+  var steps: List[Int],
 ) {
 
-  /** get the string from the original string */
+  /** string getter */
   def getString(str: String): String = str.substring(start.offset, end.offset)
 
   /** get range string */
-  def rangeString: String = s"$start-$end"
+  def rangeString: String =
+    val (Pos(sl, sc, _), Pos(el, ec, _)) = (start, end)
+    if (sl == el) s"$sl:$sc-$ec" else s"$sl:$sc - $el:$ec"
 
   /** get step string */
   def stepString: String =
@@ -56,28 +46,16 @@ case class Loc(
       case 2 => RomanNumeral(step, lower = true)
     ).mkString(".")
 
-  /** merge locations */
-  def merge(that: Loc): Option[Loc] =
-    val Loc(start, _, lname, lsteps) = this
-    val Loc(_, end, rname, rsteps) = that
-    if (lname != rname || lsteps != rsteps) return None
-    Some(Loc(start, end, lname, lsteps))
-
   /** conversion to string */
   override def toString: String =
-    val app = new Appender
-    app >> "("
-    if (steps.nonEmpty) app >> "step " >> stepString >> ", "
-    app >> rangeString
-    filename.map(app >> " @ " >> _)
-    app >> ")"
-    app.toString
+    if (stepString == "") s"($rangeString)"
+    else s"(step $stepString, $rangeString)"
 }
 
 /** positions in algorithms
   *
   * @example
-  *   3:2(5) for `Pos(3,2,5)` -- line 3, column 2, offset 5
+  *   3:2 for `Pos(3,2)`
   */
 case class Pos(
   var line: Int,

@@ -153,7 +153,7 @@ trait LAParsers extends Lexer {
         p(in) match
           case s @ Success(res, rest) =>
             new Success(
-              res.setLoc(trimmed, rest),
+              res.setLoc(trimmed, rest, List()),
               rest,
             )
           case ns: NoSuccess => ns

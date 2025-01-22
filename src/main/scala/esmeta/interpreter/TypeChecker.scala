@@ -9,7 +9,8 @@ import scala.annotation.tailrec
 import scala.collection.mutable.{Map => MMap, Set => MSet}
 
 /** dynamic type checker extension of IR interpreter */
-class TypeChecker(st: State) extends Interpreter(st) {
+class TypeChecker(st: State, target: Option[String] = None)
+  extends Interpreter(st) {
   import TypeChecker.*
 
   // mismatches while dynamic type checking
@@ -25,7 +26,7 @@ class TypeChecker(st: State) extends Interpreter(st) {
           "ReturnTypeMismatch",
           st.context.func.irFunc.name,
           None,
-          getSource(st),
+          target,
         )
       }
       st.context.retVal = Some(ret, retVal)
@@ -62,7 +63,7 @@ class TypeChecker(st: State) extends Interpreter(st) {
               "ParamTypeMismatch",
               func.irFunc.name,
               Some(param.lhs.name),
-              getSource(st),
+              target,
             )
           }
         }
@@ -71,15 +72,6 @@ class TypeChecker(st: State) extends Interpreter(st) {
     aux(params, args)
     map
   }
-
-  // get source of the program point
-  private def getSource(st: State): Option[String] = for {
-    ast <- st.context.astOpt.orElse(
-      st.callStack.view.flatMap(_.context.astOpt).headOption,
-    )
-    loc <- ast.loc
-    filename <- loc.filename
-  } yield filename.stripPrefix(CUR_DIR).stripPrefix("/")
 }
 
 object TypeChecker {
