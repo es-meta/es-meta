@@ -6,7 +6,7 @@ import esmeta.error.{NotSupported, InvalidExit, UnexpectedParseResult}
 import esmeta.error.NotSupported.*
 import esmeta.es.*
 import esmeta.es.util.*
-import esmeta.interpreter.Interpreter
+import esmeta.interpreter.*
 import esmeta.parser.ESParser
 import esmeta.state.*
 import esmeta.test262.util.*
@@ -16,6 +16,7 @@ import esmeta.util.{ConcurrentPolicy => CP}
 import esmeta.util.SystemUtils.*
 import java.io.PrintWriter
 import java.util.concurrent.TimeoutException
+import scala.collection.mutable.{Set => MSet}
 
 /** data in Test262 */
 case class Test262(
@@ -144,6 +145,11 @@ case class Test262(
     // open log file
     val logPW = getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
 
+    import esmeta.interpreter.TypeChecker.*
+
+    // mismatches for type checking
+    val mismatches: MSet[TypeMismatch] = MSet()
+
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
       name = "eval",
@@ -173,16 +179,14 @@ case class Test262(
       // check final execution status of each Test262 test
       check = test =>
         val filename = test.path
+        if (tyCheck)
+          val (ast, code) = loadTest(filename)
+          val dtc = new TypeChecker(cfg.init.from(code, ast))
+          while (dtc.step) {}
+          mismatches ++= dtc.mismatches
         val st =
           if (!useCoverage)
-            evalFile(
-              filename,
-              log && !multiple,
-              detail,
-              Some(logPW),
-              timeLimit,
-              tyCheck,
-            )
+            evalFile(filename, log && !multiple, detail, Some(logPW), timeLimit)
           else {
             val (ast, code) = loadTest(filename)
             cov.runAndCheck(Script(code, filename), ast)._1
@@ -191,7 +195,26 @@ case class Test262(
         if (returnValue != Undef) throw InvalidExit(returnValue)
       ,
       // dump coverage
-      postJob = logDir => if (useCoverage) cov.dumpTo(logDir),
+      postJob = logDir =>
+        if (tyCheck)
+          val grouped = mismatches
+            .groupBy(m => (m.tag, m.algo, m.param))
+            .map {
+              case ((tag, algo, param), ms) =>
+                (tag, algo, param, ms.flatMap(_.source).toSet)
+            }
+            .toSeq
+            .sortBy(-_._4.size)
+          for ((tag, algo, param, sources) <- grouped) {
+            println(LINE_SEP)
+            println(s"[$tag] $algo")
+            if (param.isDefined) println(s"- param: ${param.get}")
+            if (sources.nonEmpty)
+              println(s"--- ${sources.minBy(_.length)}")
+              println(s"--- total: ${sources.size} file(s)")
+          }
+          println(LINE_SEP)
+        if (useCoverage) cov.dumpTo(logDir),
     )
 
     // close log file
@@ -266,10 +289,9 @@ case class Test262(
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-    tyCheck: Boolean = false,
   ): State =
     val (ast, code) = loadTest(filename)
-    eval(code, ast, log, detail, logPW, timeLimit, tyCheck)
+    eval(code, ast, log, detail, logPW, timeLimit)
 
   // eval ECMAScript code
   private def eval(
@@ -279,7 +301,6 @@ case class Test262(
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-    tyCheck: Boolean = false,
   ): State =
     val st = cfg.init.from(code, ast)
     Interpreter(
@@ -288,7 +309,6 @@ case class Test262(
       detail = detail,
       logPW = logPW,
       timeLimit = timeLimit,
-      tyCheck = tyCheck,
     )
 
   // logging mode for tests
