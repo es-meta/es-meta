@@ -150,6 +150,24 @@ case class Test262(
     // mismatches for type checking
     val mismatches: MSet[TypeMismatch] = MSet()
 
+    // helper dump function for type mismatches
+    def dumpMismatches(baseDir: String): Unit =
+      val dtcPW = getPrintWriter(s"$baseDir/type-mismatches")
+      val chunkedMismatches = TypeMismatch.chunk(mismatches)
+      dtcPW.println(s"Result: ${chunkedMismatches.length} mismatches detected")
+      for (mismatch <- chunkedMismatches) {
+        dtcPW.println(LINE_SEP)
+        dtcPW.println(s"[${mismatch.tag}] ${mismatch.algo}")
+        if (mismatch.param.isDefined)
+          dtcPW.println(s"- param: ${mismatch.param.get}")
+        if (mismatch.sources.nonEmpty)
+          dtcPW.println(s"--- ${mismatch.sources.minBy(_.length)}")
+          dtcPW.println(s"--- total: ${mismatch.sources.size} file(s)")
+        dtcPW.flush
+      }
+      dtcPW.println(LINE_SEP)
+      dtcPW.close
+
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
       name = "eval",
@@ -196,24 +214,7 @@ case class Test262(
       ,
       // dump coverage
       postJob = logDir =>
-        if (tyCheck)
-          val grouped = mismatches
-            .groupBy(m => (m.tag, m.algo, m.param))
-            .map {
-              case ((tag, algo, param), ms) =>
-                (tag, algo, param, ms.flatMap(_.source).toSet)
-            }
-            .toSeq
-            .sortBy(-_._4.size)
-          for ((tag, algo, param, sources) <- grouped) {
-            println(LINE_SEP)
-            println(s"[$tag] $algo")
-            if (param.isDefined) println(s"- param: ${param.get}")
-            if (sources.nonEmpty)
-              println(s"--- ${sources.minBy(_.length)}")
-              println(s"--- total: ${sources.size} file(s)")
-          }
-          println(LINE_SEP)
+        if (tyCheck) dumpMismatches(logDir)
         if (useCoverage) cov.dumpTo(logDir),
     )
 

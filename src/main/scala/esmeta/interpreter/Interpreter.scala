@@ -54,8 +54,8 @@ class Interpreter(
       for (mismatch <- dtc.mismatches) {
         println(LINE_SEP)
         println(s"[${mismatch.tag}] ${mismatch.algo}")
-        if (mismatch.param.isDefined) println(s"- param: ${mismatch.param.get}")
-        if (mismatch.source.isDefined) println(s"--- ${mismatch.source.get}")
+        if (mismatch.param.isDefined)
+          println(s"- param: ${mismatch.param.get}")
       }
       println(LINE_SEP)
     if (log)

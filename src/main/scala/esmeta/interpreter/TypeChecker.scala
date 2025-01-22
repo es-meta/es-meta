@@ -89,4 +89,23 @@ object TypeChecker {
     param: Option[String], // Defined if tag is "ParamTypeMismatch"
     source: Option[String],
   )
+
+  case class ChunkedTypeMismatch(
+    tag: String, // "ParamTypeMismatch" or "ReturnTypeMismatch"
+    algo: String,
+    param: Option[String], // Defined if tag is "ParamTypeMismatch"
+    sources: Set[String],
+  )
+
+  object TypeMismatch {
+    def chunk(mismatches: MSet[TypeMismatch]): Seq[ChunkedTypeMismatch] =
+      mismatches
+        .groupBy(m => (m.tag, m.algo, m.param))
+        .map {
+          case ((tag, algo, param), ms) =>
+            ChunkedTypeMismatch(tag, algo, param, ms.flatMap(_.source).toSet)
+        }
+        .toSeq
+        .sortBy(-_.sources.size)
+  }
 }
