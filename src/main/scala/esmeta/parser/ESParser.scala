@@ -27,20 +27,16 @@ case class ESParser(
   def apply(name: String, args: List[Boolean] = Nil): AstFrom =
     val parser = parsers(name)(args)
     new AstFrom {
-      def fromFile(filename: String): Ast =
+      def fromFile(str: String): Ast =
         if (debug) println(debugWelcome)
-        val ast = parse(parser, fileReader(filename)).get
-        updateFilename(ast, filename)
-        ast
+        parse(parser, fileReader(str)).get
       def from(str: String): Ast =
         if (debug) println(debugWelcome)
         parse(parser, str).get
       def fromFileWithCode(filename: String): (Ast, String) =
         if (debug) println(debugWelcome)
         val res = parse(parser, fileReader(filename))
-        val ast = res.get
-        updateFilename(ast, filename)
-        (ast, res.next.source.toString)
+        (res.get, res.next.source.toString)
       def fromWithCode(str: String): (Ast, String) =
         if (debug) println(debugWelcome)
         val res = parse(parser, str)
@@ -60,13 +56,6 @@ case class ESParser(
       else (args: List[Boolean]) => nt(name, lexers(name, 0 /* TODO args */ ))
     name -> parser
   }).toMap
-
-  /** recursively update the filename in the location information of the AST */
-  def updateFilename(ast: Ast, name: String): Unit =
-    for (loc <- ast.loc) loc.filename = Some(name)
-    ast match
-      case ast: Syntactic => ast.children.map(_.map(updateFilename(_, name)))
-      case _              =>
 
   // ---------------------------------------------------------------------------
   // private helpers
@@ -94,7 +83,11 @@ case class ESParser(
     syn: Syntactic,
     astStart: Ast,
     astEnd: Ast,
-  ): Syntactic = syn.setLoc(astStart mergeLoc astEnd)
+  ): Syntactic =
+    (astStart.loc.map(_.start), astEnd.loc.map(_.end)) match
+      case (Some(ls), Some(le)) => syn.setLoc(ls, le, List())
+      case _                    =>
+    syn
 
   // get a parser
   private def getParser(prod: Production): ESParser[Ast] = memo(args =>

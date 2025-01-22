@@ -114,7 +114,7 @@ trait IndentParsers extends BasicParsers with EPackratParsers {
           p(trimmed) match
             case s @ Success(res, rest) =>
               Success(
-                res.setLoc(trimmed, rest, steps = trimmed.data.steps.reverse),
+                res.setLoc(trimmed, rest, trimmed.data.steps.reverse),
                 rest,
               )
             case ns: NoSuccess => ns

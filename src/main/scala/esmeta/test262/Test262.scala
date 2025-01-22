@@ -152,21 +152,24 @@ case class Test262(
 
     // helper dump function for type mismatches
     def dumpMismatches(baseDir: String): Unit =
-      val dtcPW = getPrintWriter(s"$baseDir/type-mismatches")
+      val dtcPW = getPrintWriter(s"$baseDir/type-mismatches.tsv")
+      var header =
+        Vector("tag", "algo", "param", "source", "total(#)").mkString("\t")
+      dtcPW.println(header)
       val chunkedMismatches = TypeMismatch.chunk(mismatches)
-      dtcPW.println(s"Result: ${chunkedMismatches.length} mismatches detected")
       for (mismatch <- chunkedMismatches) {
-        dtcPW.println(LINE_SEP)
-        dtcPW.println(s"[${mismatch.tag}] ${mismatch.algo}")
-        if (mismatch.param.isDefined)
-          dtcPW.println(s"- param: ${mismatch.param.get}")
-        if (mismatch.sources.nonEmpty)
-          dtcPW.println(s"--- ${mismatch.sources.minBy(_.length)}")
-          dtcPW.println(s"--- total: ${mismatch.sources.size} file(s)")
+        var row = Vector(
+          mismatch.tag,
+          mismatch.algo,
+          mismatch.param.getOrElse(""),
+          mismatch.sources.minByOption(_.length).getOrElse(""),
+          mismatch.sources.size,
+        ).mkString("\t")
+        dtcPW.println(row)
         dtcPW.flush
       }
-      dtcPW.println(LINE_SEP)
       dtcPW.close
+      println(s"Result: ${chunkedMismatches.length} mismatches detected")
 
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
@@ -199,7 +202,8 @@ case class Test262(
         val filename = test.path
         if (tyCheck)
           val (ast, code) = loadTest(filename)
-          val dtc = new TypeChecker(cfg.init.from(code, ast))
+          val dtc =
+            new TypeChecker(cfg.init.from(code, ast), Some(test.relName))
           while (dtc.step) {}
           mismatches ++= dtc.mismatches
         val st =
