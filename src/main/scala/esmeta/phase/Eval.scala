@@ -46,6 +46,14 @@ case object Eval extends Phase[CFG, State] {
           featureStacks += featureStack
       }
     }
+    for (cv <- interp.touchedCondViews) {
+      val (CondView(_, view), _) = cv
+      view.foreach {
+        case (enclosing, feature, _) =>
+          val featureStack = (feature :: enclosing)
+          featureStacks += featureStack
+      }
+    }
     for (featureStack <- featureStacks) {
       val featureStackStr = featureStack.map(_.func.name).mkString("\n")
       println(featureStackStr)
