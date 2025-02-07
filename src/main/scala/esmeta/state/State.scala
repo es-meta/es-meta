@@ -142,6 +142,32 @@ case class State(
       newHeap,
     )
 
+  /** get type of value in current state */
+  def typeOf(value: Value): ValueTy =
+    import esmeta.error.NotSupported.Category.*
+    import esmeta.error.NotSupported.{*, given}
+    value match
+      case a: Addr =>
+        heap(a) match
+          case RecordObj(tname, _) => RecordT(tname)
+          case m: MapObj           => RecordT("__MAP__")
+          case ListObj(values)     => values.map(typeOf).foldLeft(BotT)(_ || _)
+          case YetObj(_, msg)      => throw NotSupported(Feature)(msg)
+      case Clo(func, _)      => CloT(func.name)
+      case Cont(func, _, _)  => ContT(func.id)
+      case AstValue(ast)     => AstT(ast.name, ast.idx)
+      case gr: GrammarSymbol => GrammarSymbolT(gr)
+      case Math(d)           => MathT(d)
+      case Infinity(pos)     => InfinityT(pos)
+      case Enum(name)        => EnumT(name)
+      case CodeUnit(_)       => CodeUnitT
+      case Number(_)         => NumberT
+      case BigInt(_)         => BigIntT
+      case Str(_)            => StrT
+      case Bool(_)           => BoolT
+      case Undef             => UndefT
+      case Null              => NullT
+
   /** get string for a current cursor */
   def getCursorString: String = getCursorString(false)
   def getCursorString(location: Boolean): String = context.cursor match

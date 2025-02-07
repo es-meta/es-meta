@@ -51,13 +51,9 @@ class Interpreter(
     if (tyCheck)
       val dtc = new TypeChecker(baseSt)
       while (dtc.step) {}
-      for (mismatch <- dtc.mismatches) {
+      for (error <- dtc.errors)
+        println(error)
         println(LINE_SEP)
-        println(s"[${mismatch.tag}] ${mismatch.algo}")
-        if (mismatch.param.isDefined)
-          println(s"- param: ${mismatch.param.get}")
-      }
-      println(LINE_SEP)
     if (log)
       pw.println(st)
       pw.close

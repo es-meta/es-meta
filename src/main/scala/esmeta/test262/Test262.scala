@@ -8,6 +8,7 @@ import esmeta.es.*
 import esmeta.es.util.*
 import esmeta.interpreter.*
 import esmeta.parser.ESParser
+import esmeta.ty.{*, given}
 import esmeta.state.*
 import esmeta.test262.util.*
 import esmeta.util.*
@@ -16,7 +17,7 @@ import esmeta.util.{ConcurrentPolicy => CP}
 import esmeta.util.SystemUtils.*
 import java.io.PrintWriter
 import java.util.concurrent.TimeoutException
-import scala.collection.mutable.{Set => MSet}
+import scala.collection.mutable.{Map => MMap, Set => MSet}
 
 /** data in Test262 */
 case class Test262(
@@ -145,31 +146,29 @@ case class Test262(
     // open log file
     val logPW = getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
 
-    import esmeta.interpreter.TypeChecker.*
+    val tyStringifier = TyElem.getStringifier(true, false)
+    import tyStringifier.given
 
-    // mismatches for type checking
-    val mismatches: MSet[TypeMismatch] = MSet()
+    // detected type errors while dynamic type checking
+    val totalErrors: MMap[TypeError, MSet[Test]] = MMap()
+    def addErrors(errors: MSet[TypeError], test: Test): Unit =
+      val taggedErrors = errors.map(error => error -> test)
+      for ((error, test) <- taggedErrors) totalErrors.get(error) match
+        case Some(tests) => tests += test
+        case None        => totalErrors += (error -> MSet(test))
 
     // helper dump function for type mismatches
     def dumpMismatches(baseDir: String): Unit =
-      val dtcPW = getPrintWriter(s"$baseDir/type-mismatches.tsv")
-      var header =
-        Vector("tag", "algo", "param", "source", "total(#)").mkString("\t")
-      dtcPW.println(header)
-      val chunkedMismatches = TypeMismatch.chunk(mismatches)
-      for (mismatch <- chunkedMismatches) {
-        var row = Vector(
-          mismatch.tag,
-          mismatch.algo,
-          mismatch.param.getOrElse(""),
-          mismatch.sources.minByOption(_.length).getOrElse(""),
-          mismatch.sources.size,
-        ).mkString("\t")
-        dtcPW.println(row)
+      val dtcPW = getPrintWriter(s"$baseDir/type-mismatches")
+      val sorted: Vector[TypeError] =
+        totalErrors.iterator.toVector
+          .sortBy { case (_, tests) => -tests.size }
+          .map(_._1)
+      for (error <- sorted)
+        dtcPW.println(error)
+        dtcPW.println(LINE_SEP)
         dtcPW.flush
-      }
-      dtcPW.close
-      println(s"Result: ${chunkedMismatches.length} mismatches detected")
+      println(s"Result: ${sorted.length} errors detected")
 
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
@@ -202,10 +201,9 @@ case class Test262(
         val filename = test.path
         if (tyCheck)
           val (ast, code) = loadTest(filename)
-          val dtc =
-            new TypeChecker(cfg.init.from(code, ast), Some(test.relName))
+          val dtc = new TypeChecker(cfg.init.from(code, ast))
           while (dtc.step) {}
-          mismatches ++= dtc.mismatches
+          addErrors(dtc.errors, test)
         val st =
           if (!useCoverage)
             evalFile(filename, log && !multiple, detail, Some(logPW), timeLimit)
