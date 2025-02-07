@@ -31,6 +31,9 @@ case object TestMinimals extends Phase[CFG, Unit] {
   val name = "test-minimals"
   val help = "test minimals"
 
+  // todo(@tmdghks)
+  // transpiler crash is also bug, we need to log
+  // if origianl code is error but transpiled code is not error, it is bug
   def apply(cfg: CFG, cmdConfig: CommandConfig, config: Config): Unit =
     println("Test minimals")
 
@@ -75,6 +78,7 @@ case object TestMinimals extends Phase[CFG, Unit] {
         cfg,
         targetFeatSetConfig = TargetFeatureSetConfig(),
         minifyCmd = config.minifier,
+        debug = config.debug.getOrElse(0),
       )
     val bugCount =
       if config.deltaDebug then
@@ -127,6 +131,11 @@ case object TestMinimals extends Phase[CFG, Unit] {
       "minifier to use.",
     ),
     (
+      "debug",
+      NumOption((c, k) => c.debug = Some(k)),
+      "set the debug level",
+    ),
+    (
       "delta-debug",
       BoolOption((c) => c.deltaDebug = true),
       "use delta debugging.",
@@ -139,6 +148,7 @@ case object TestMinimals extends Phase[CFG, Unit] {
     var injectTimeLimit: Option[Int] = None,
     var testTimeLimit: Option[Int] = None,
     var minifier: Option[String] = None,
+    var debug: Option[Int] = Some(0),
     var deltaDebug: Boolean = false,
   )
 }

@@ -10,6 +10,7 @@ import esmeta.es.util.delta.DeltaDebugger
 import esmeta.injector.ConformTest
 import esmeta.injector.ExitStateExtractor
 import esmeta.state.*
+import esmeta.es.util.Coverage.*
 
 case class MinifyTesterConfig(
   timeLimit: Option[Int] = Some(1),
@@ -35,7 +36,17 @@ class MinifyTester(
   def test(code: String): Option[MinifyTestResult] =
     // Minifier.minifySwc(code)
     Minifier.minify(code, minifyCmd) match
-      case Failure(exception) => log("minify-tester", s"$exception"); None
+      // transpiler crash ?
+      case Failure(exception) =>
+        log("minify-tester", s"$exception");
+        Some(
+          AssertionFailure(
+            code,
+            "",
+            "",
+            exception.toString,
+          ),
+        )
       case Success(minified) => {
         val injected = Try {
           RuntimeCompatInjector.replaceBody(
@@ -88,8 +99,44 @@ class MinifyTester(
                     exception,
                   ),
                 )
-          case Success(_) =>
-            log("minify-tester", "exit state is not normal"); None
+          case Success(i) =>
+            // exit tag is not normal
+            val originalExitTag = i.exitTag
+            log("minify-tester", s"exit tag is not normal: $originalExitTag")
+            val interpOriginal = Interp(
+              cfg.init.from(code),
+              cp = false,
+              timeLimit = timeLimit,
+            )
+            val interpMinified = Interp(
+              cfg.init.from(minified),
+              cp = false,
+              timeLimit = timeLimit,
+            )
+            val resOriginal = interpOriginal.result
+            val resMinified = interpMinified.result
+            if resOriginal == resMinified then
+              log("minify-tester", "exit tag is not normal but result is same")
+              Some(
+                AssertionSuccess(
+                  code,
+                  minified,
+                  injected.toString,
+                ),
+              )
+            else
+              log(
+                "minify-tester",
+                "exit tag is not normal and result is different",
+              )
+              Some(
+                AssertionFailure(
+                  code,
+                  minified,
+                  injected.toString,
+                  s"exit tag is not normal: $originalExitTag",
+                ),
+              )
           case Failure(exception) =>
             log("minify-tester", exception.toString); None
       }

@@ -210,12 +210,11 @@ class MinifyFuzzer(
           val returns = injector.assertions
           val tracerExprCode = tracerExprInjector(code)
           val codes = List(tracerExprCode)
-          // println(s"tracerExprCode: $tracerExprCode")
-          //   code +: tracerExprMutator(code, 5, None).map(
-          //   _._2.toString(grammar = Some(cfg.grammar)),
-          // )
+          val returnsWithEmpty =
+            if returns.isEmpty then Vector(ReturnVariable(""))
+            else returns
           (for {
-            ret <- returns.par
+            ret <- returnsWithEmpty.par
             code <- codes.par
           } yield {
             val original = buildTestProgram(code, ret)

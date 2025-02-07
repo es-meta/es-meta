@@ -27,7 +27,7 @@ _esmeta_completions() {
   fuzzOpt="-fuzz:log -fuzz:log-interval -fuzz:out -fuzz:debug -fuzz:timeout -fuzz:trial -fuzz:duration -fuzz:seed -fuzz:cp -fuzz:k-fs -fuzz:init"
   coverageinvestigateOpt="-coverage-investigate:out -coverage-investigate:use-db -coverage-investigate:check-json -coverage-investigate:minifier"
   minifycheckOpt="-minify-check:out -minify-check:minifier"
-  testminimalsOpt="-test-minimals:out -test-minimals:eval-time-limit -test-minimals:inject-time-limit -test-minimals:test-time-limit -test-minimals:minifier -test-minimals:delta-debug"
+  testminimalsOpt="-test-minimals:out -test-minimals:eval-time-limit -test-minimals:inject-time-limit -test-minimals:test-time-limit -test-minimals:minifier -test-minimals:debug -test-minimals:delta-debug"
   cleanupminimalsOpt="-cleanup-minimals:out"
   fstriestatsOpt="-fstrie-stats:out"
   comparefeaturetreeOpt="-compare-feature-tree:out -compare-feature-tree:transpiler"
