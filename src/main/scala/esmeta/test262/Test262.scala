@@ -157,18 +157,23 @@ case class Test262(
         case Some(tests) => tests += test
         case None        => totalErrors += (error -> MSet(test))
 
-    // helper dump function for type mismatches
-    def dumpMismatches(baseDir: String): Unit =
-      val dtcPW = getPrintWriter(s"$baseDir/type-mismatches")
+    // helper dump function for type errors
+    def dumpTypeErrors(baseDir: String): Unit =
+      val dtcPW = getPrintWriter(s"$baseDir/errors")
       val sorted: Vector[TypeError] =
         totalErrors.iterator.toVector
           .sortBy { case (_, tests) => -tests.size }
           .map(_._1)
-      for (error <- sorted)
+      dtcPW.println(s"${sorted.length} type errors detected in Test262 tests")
+      dtcPW.println(LINE_SEP)
+      for { error <- sorted } do {
         dtcPW.println(error)
+        dtcPW.println(s"- Found in ${totalErrors(error).size} test(s)")
+        dtcPW.println(s"  - sample: ${totalErrors(error).head.relName}")
         dtcPW.println(LINE_SEP)
         dtcPW.flush
-      println(s"Result: ${sorted.length} errors detected")
+      }
+      dtcPW.close()
 
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
@@ -216,7 +221,7 @@ case class Test262(
       ,
       // dump coverage
       postJob = logDir =>
-        if (tyCheck) dumpMismatches(logDir)
+        if (tyCheck) dumpTypeErrors(s"$logDir/tycheck")
         if (useCoverage) cov.dumpTo(logDir),
     )
 
