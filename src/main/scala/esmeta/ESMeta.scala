@@ -88,6 +88,7 @@ object ESMeta extends Git(BASE_DIR) {
     CmdTestMinimals,
     CmdCleanupMinimals,
     CmdFSTrieStats,
+    CmdCompareFeatureTree,
     // ECMAScript Static Analysis (Meta-Level Static Analysis)
     CmdAnalyze,
   )
@@ -119,6 +120,7 @@ object ESMeta extends Git(BASE_DIR) {
     TestMinimals,
     CleanupMinimals,
     FSTrieStats,
+    CompareFeatureTree,
     // ECMAScript Static Analysis (Meta-Level Static Analysis)
     Analyze,
   )

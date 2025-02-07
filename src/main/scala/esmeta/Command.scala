@@ -275,6 +275,14 @@ case object CmdFSTrieStats
   )
 }
 
+case object CmdCompareFeatureTree
+  extends Command("compare-feature-tree", CmdBase >> CompareFeatureTree) {
+  val help = "Compare given feature tree with an ideal feature tree"
+  val examples = List(
+    "esmeta compare-feature-tree log-dir -compare-feature-tree:out=out.json",
+  )
+}
+
 // -----------------------------------------------------------------------------
 // ECMAScript Static Analysis (Meta-Level Static Analysis)
 // -----------------------------------------------------------------------------

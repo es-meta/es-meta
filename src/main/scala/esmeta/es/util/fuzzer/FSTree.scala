@@ -163,7 +163,8 @@ class FSTreeWrapper(
     */
   case class FSTree(
     private val id: Int,
-    private val children: MMap[String, FSTree] = MMap.empty[String, FSTree],
+    private[FSTreeWrapper] val children: MMap[String, FSTree] =
+      MMap.empty[String, FSTree],
     private var status: FSTreeStatus,
     private val depth: Int,
     var hits: Long = 0,
@@ -364,6 +365,7 @@ class FSTreeWrapper(
           case (k, v) =>
             v.stacksWithProbsSuppl(currStack :+ k)
         }.toMap + (currStack -> (hits.toDouble / (hits + misses)))
+
   }
 }
 
