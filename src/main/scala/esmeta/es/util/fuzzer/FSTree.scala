@@ -98,9 +98,8 @@ class FSTreeWrapper(
     val (chiSq, oddsRatio) =
       computeChiSq(hits, misses, absentHits, absentMisses)
     if (
-        (hits + misses < config.minTouch) || (oddsRatio <= 1 && config.oneSided)
-      )
-    then 0
+      (hits + misses < config.minTouch) || (oddsRatio <= 1 && config.oneSided)
+    ) then 0
     else
       assert(
         chiSq >= 0,

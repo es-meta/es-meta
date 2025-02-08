@@ -33,7 +33,7 @@ class Fuzzer(
   duration: Option[Int] = None, // `None` denotes no bound
   init: Option[String] = None,
   cp: Boolean = false,
-  fsTreeConfig: FSTreeConfig,
+  targetFeatSetConfig: TargetFeatureSetConfig,
   minifyCmd: Option[String] = None,
 ) {
   import Fuzzer.*
@@ -42,8 +42,8 @@ class Fuzzer(
   lazy val grammar = cfg.grammar
   lazy val scriptParser = cfg.scriptParser
 
-  val kFs = fsTreeConfig.maxSensitivity
-  val doCleanup = fsTreeConfig.doCleanup
+  val kFs = targetFeatSetConfig.maxSensitivity
+  val doCleanup = targetFeatSetConfig.doCleanup
 
   /** generated ECMAScript programs */
   lazy val result: Coverage =
@@ -226,7 +226,7 @@ class Fuzzer(
       cp = cp,
       timeLimit = timeLimit,
       logDir = Some(logDir),
-      fsTreeConfig = fsTreeConfig,
+      targetFeatureSetConfig = targetFeatSetConfig,
       minifyCmd = minifyCmd,
     )
 
@@ -322,7 +322,7 @@ class Fuzzer(
       "branch(#)",
       "minifiable(%)",
     )
-    (1 to kFs).foreach { k => header ++= Vector(s"$k-feat-stacks(#)") }
+    header ++= Vector("target-feat(#)")
     if (kFs > 0) header ++= Vector(s"sens-node(#)", s"sens-branch(#)")
     header ++= Vector("target-conds(#)")
     if (kFs > 0) header ++= Vector(s"sens-target-conds(#)")
@@ -367,8 +367,8 @@ class Fuzzer(
     val tcv = cov.targetCondViews.map(_._2.size).fold(0)(_ + _)
     val mr = (cov.minifiableRate * 100 * 1000).round / 1000.0
     var row = Vector(iter, e, t, visited.size, pool.size, n, b, mr)
-    val sensDistr = cov.fsTrie.sensDistr
-    (1 to kFs).foreach { k => row ++= Vector(sensDistr(k)) }
+    val targetFeatureSize = cov.targetFeatSet.targetFeatureSize
+    row ++= Vector(targetFeatureSize)
     if (kFs > 0) row ++= Vector(nv, bv)
     row ++= Vector(tc)
     if (kFs > 0) row ++= Vector(tcv)

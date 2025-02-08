@@ -76,10 +76,10 @@ object Minifier {
       case _ => throw new Exception("Invalid minifier specified.")
     execScript(minifyCmd(minifierCode), src)
 
-  def checkMinifyDiffSwc(code: String): Boolean =
+  def checkMinifyDiffSwc(code: String): Option[Boolean] =
     checkMinifyDiff(code, Some("swc"))
 
-  def checkMinifyDiff(code: String, cmd: Option[String]): Boolean =
+  def checkMinifyDiff(code: String, cmd: Option[String]): Option[Boolean] =
     val minifierCode = cmd match
       case Some("swc") | Some("Swc")       => "checkDiffSwc"
       case Some("terser") | Some("Terser") => "checkDiffTerser"
@@ -95,29 +95,29 @@ object Minifier {
       result match {
         case Success(minifiedAndDiff) =>
           val diffResult = minifiedAndDiff.split(LINE_SEP).last
-          if diffResult == "true" then true
-          else if diffResult == "false" then false
+          if diffResult == "true" then Some(true)
+          else if diffResult == "false" then Some(false)
           else {
             throw new Exception(s"Invalid diff result: $diffResult")
           }
         case Failure(exception) =>
           // println(s"[minify-check] $code $exception")
-          false
+          None
       }
     } catch {
-      case err => false
+      case err => None
     }
 
-  def checkMinifyDiffSrv(code: String, cmd: Option[String]): Boolean =
+  def checkMinifyDiffSrv(code: String, cmd: Option[String]): Option[Boolean] =
     try {
       val diffResult = MinifyServer.queryDiff(code, cmd).split(LINE_SEP).last
-      if diffResult == "true" then true
-      else if diffResult == "false" then false
+      if diffResult == "true" then Some(true)
+      else if diffResult == "false" then Some(false)
       else {
         throw new Exception(s"Invalid diff result: $diffResult")
       }
     } catch {
-      case err => false
+      case err => None
     }
 }
 

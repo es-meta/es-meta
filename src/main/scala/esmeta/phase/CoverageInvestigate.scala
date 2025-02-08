@@ -50,7 +50,9 @@ case object CoverageInvestigate extends Phase[CFG, Unit] {
           ) = covInvData
           val strictCode = USE_STRICT + code
           val blockingsWithBug = blockings.filter { blocking =>
-            Minifier.checkMinifyDiff(strictCode, config.minifier)
+            Minifier
+              .checkMinifyDiff(strictCode, config.minifier)
+              .getOrElse(false)
           }
           val blockingWithoutBug = blockings -- blockingsWithBug
           res ::= CovInvBugData(

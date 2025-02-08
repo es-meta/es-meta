@@ -28,7 +28,7 @@ class MinifyChecker(
    */
   def check(code: String): Option[MinifyCheckResult] = minify(code).map {
     minified =>
-      val diff = checkMinifyDiff(code, cmdOption)
+      val diff = checkMinifyDiff(code, cmdOption).getOrElse(false)
 
       MinifyCheckResult(
         diff = diff,

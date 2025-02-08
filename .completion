@@ -11,7 +11,7 @@ _esmeta_completions() {
   local cur prev opts lastc informats outformats datafiles
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  cmdList="help extract compile build-cfg tycheck parse eval web test262-test inject inject-tracer inject-minify mutate fuzz minify-fuzz delta-debug coverage-investigate minify-check test-minimals cleanup-minimals fstrie-stats analyze"
+  cmdList="help extract compile build-cfg tycheck parse eval web test262-test inject inject-tracer inject-minify mutate fuzz minify-fuzz delta-debug coverage-investigate minify-check test-minimals cleanup-minimals fstrie-stats compare-feature-tree analyze"
   globalOpt="-silent -error -status -time -test262dir"
   helpOpt=""
   extractOpt="-extract:target -extract:log -extract:eval -extract:repl"
@@ -30,6 +30,7 @@ _esmeta_completions() {
   testminimalsOpt="-test-minimals:out -test-minimals:eval-time-limit -test-minimals:inject-time-limit -test-minimals:test-time-limit -test-minimals:minifier -test-minimals:delta-debug"
   cleanupminimalsOpt="-cleanup-minimals:out"
   fstriestatsOpt="-fstrie-stats:out"
+  comparefeaturetreeOpt="-compare-feature-tree:out -compare-feature-tree:transpiler"
   analyzeOpt="-analyze:repl"
   # completion for commands
   case "${COMP_CWORD}" in
@@ -125,6 +126,10 @@ _esmeta_completions() {
           ;;
         fstrie-stats)
           COMPREPLY=($(compgen -W "${globalOpt} ${fstriestatsOpt}"))
+          return 0
+          ;;
+        compare-feature-tree)
+          COMPREPLY=($(compgen -W "${globalOpt} ${comparefeaturetreeOpt}"))
           return 0
           ;;
         analyze)

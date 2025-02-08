@@ -12,7 +12,13 @@ import esmeta.es.util.Coverage.Interp
 import esmeta.state.*
 import esmeta.util.*
 import esmeta.util.SystemUtils.*
-import esmeta.es.util.fuzzer.{MinifyChecker, FSTreeWrapper, FSTreeConfig}
+import esmeta.es.util.fuzzer.{
+  MinifyChecker,
+  FSTreeWrapper,
+  FSTreeConfig,
+  TargetFeatureSetConfig,
+  TargetFeatureSet,
+}
 import esmeta.js.minifier.Minifier
 import esmeta.util.BaseUtils.chiSqDistTable
 import io.circe.*, io.circe.syntax.*, io.circe.generic.semiauto.*
@@ -31,7 +37,7 @@ case class Coverage(
   cp: Boolean = false,
   timeLimit: Option[Int] = None,
   logDir: Option[String] = None, // TODO: use this
-  fsTreeConfig: FSTreeConfig,
+  targetFeatureSetConfig: TargetFeatureSetConfig,
   minifyCmd: Option[String] = None,
 ) {
   import Coverage.{*, given}
@@ -39,10 +45,9 @@ case class Coverage(
   val jsonProtocol: JsonProtocol = JsonProtocol(cfg)
   import jsonProtocol.given
 
-  val kFs = fsTreeConfig.maxSensitivity
-  val isSelective = fsTreeConfig.isSelective
-  val useSrv = fsTreeConfig.useSrv
-  val fsTrie = new FSTreeWrapper(config = fsTreeConfig)
+  val kFs = targetFeatureSetConfig.maxSensitivity
+  val useSrv = targetFeatureSetConfig.useSrv
+  var targetFeatSet = new TargetFeatureSet(config = targetFeatureSetConfig)
 
   // minimal scripts
   def minimalScripts: Set[Script] = _minimalScripts
@@ -67,68 +72,68 @@ case class Coverage(
     : MMap[List[String], Map[CondView, (Option[Nearest], Script)]] =
     MMap().withDefault(_ => Map())
 
-  private def addRawNodeView(
-    rawNodeView: NodeView,
-    script: Script,
-  ): Unit =
-    for (k <- 1 to kFs) {
-      val NodeView(node, rawView) = rawNodeView
-      rawView.foreach((rawEnclosing, feature, path) =>
-        val rawStack = feature :: rawEnclosing
-        val featureStack = rawStack.take(k)
-        if featureStack.nonEmpty then
-          val featureStackStr = featureStack.map(_.func.name)
-          featureNodeViewMap(featureStackStr).get(rawNodeView) match
-            case Some(origScript)
-                if origScript.code.length > script.code.length =>
-              featureNodeViewMap(featureStackStr) += (
-                NodeView(
-                  node,
-                  Some((featureStack.tail, featureStack.head, path)),
-                ) -> script
-              )
-            case None =>
-              featureNodeViewMap(featureStackStr) += (
-                NodeView(
-                  node,
-                  Some((featureStack.tail, featureStack.head, path)),
-                ) -> script
-              )
-            case _ => (),
-      )
-    }
+  // private def addRawNodeView(
+  //   rawNodeView: NodeView,
+  //   script: Script,
+  // ): Unit =
+  //   for (k <- 1 to kFs) {
+  //     val NodeView(node, rawView) = rawNodeView
+  //     rawView.foreach((rawEnclosing, feature, path) =>
+  //       val rawStack = feature :: rawEnclosing
+  //       val featureStack = rawStack.take(k)
+  //       if featureStack.nonEmpty then
+  //         val featureStackStr = featureStack.map(_.func.name)
+  //         featureNodeViewMap(featureStackStr).get(rawNodeView) match
+  //           case Some(origScript)
+  //               if origScript.code.length > script.code.length =>
+  //             featureNodeViewMap(featureStackStr) += (
+  //               NodeView(
+  //                 node,
+  //                 Some((featureStack.tail, featureStack.head, path)),
+  //               ) -> script
+  //             )
+  //           case None =>
+  //             featureNodeViewMap(featureStackStr) += (
+  //               NodeView(
+  //                 node,
+  //                 Some((featureStack.tail, featureStack.head, path)),
+  //               ) -> script
+  //             )
+  //           case _ => (),
+  //     )
+  //   }
 
-  private def addRawCondView(
-    rawCondView: CondView,
-    nearest: Option[Nearest],
-    script: Script,
-  ): Unit =
-    for (k <- 1 to kFs) {
-      val CondView(cond, rawView) = rawCondView
-      rawView.foreach((rawEnclosing, feature, path) =>
-        val rawStack = feature :: rawEnclosing
-        val featureStack = rawStack.take(k)
-        if featureStack.nonEmpty then
-          val featureStackStr = featureStack.map(_.func.name)
-          featureCondViewMap(featureStackStr).get(rawCondView) match
-            case Some((origNearest, origScript))
-                if origScript.code.length > script.code.length =>
-              featureCondViewMap(featureStackStr) += (
-                CondView(
-                  cond,
-                  Some((featureStack.tail, featureStack.head, path)),
-                ) -> (nearest, script)
-              )
-            case None =>
-              featureCondViewMap(featureStackStr) += (
-                CondView(
-                  cond,
-                  Some((featureStack.tail, featureStack.head, path)),
-                ) -> (nearest, script)
-              )
-            case _ => (),
-      )
-    }
+  // private def addRawCondView(
+  //   rawCondView: CondView,
+  //   nearest: Option[Nearest],
+  //   script: Script,
+  // ): Unit =
+  //   for (k <- 1 to kFs) {
+  //     val CondView(cond, rawView) = rawCondView
+  //     rawView.foreach((rawEnclosing, feature, path) =>
+  //       val rawStack = feature :: rawEnclosing
+  //       val featureStack = rawStack.take(k)
+  //       if featureStack.nonEmpty then
+  //         val featureStackStr = featureStack.map(_.func.name)
+  //         featureCondViewMap(featureStackStr).get(rawCondView) match
+  //           case Some((origNearest, origScript))
+  //               if origScript.code.length > script.code.length =>
+  //             featureCondViewMap(featureStackStr) += (
+  //               CondView(
+  //                 cond,
+  //                 Some((featureStack.tail, featureStack.head, path)),
+  //               ) -> (nearest, script)
+  //             )
+  //           case None =>
+  //             featureCondViewMap(featureStackStr) += (
+  //               CondView(
+  //                 cond,
+  //                 Some((featureStack.tail, featureStack.head, path)),
+  //               ) -> (nearest, script)
+  //             )
+  //           case _ => (),
+  //     )
+  //   }
 
   def apply(node: Node): Map[View, Script] = nodeViewMap.getOrElse(node, Map())
   def getScript(nv: NodeView): Option[Script] = apply(nv.node).get(nv.view)
@@ -203,9 +208,10 @@ case class Coverage(
         .flatMap(_.view)
         .map(v => (v._2 :: v._1).map(_.func.name))
 
-    if (isMinifierHit) then fsTrie.touchWithHit(rawStacks)
-    else fsTrie.touchWithMiss(rawStacks)
-
+    isMinifierHit match
+      case Some(true)  => targetFeatSet.touchWithHit(rawStacks)
+      case Some(false) => targetFeatSet.touchWithMiss(rawStacks)
+      case _           => /* do nothing */
     // update node coverage
     for ((rawNodeView, nearest) <- interp.touchedNodeViews)
       // cut out features TODO: do this in the interpreter (Kanguk Lee)
@@ -213,7 +219,8 @@ case class Coverage(
       val view: View = rawView.flatMap {
         case (rawEnclosing, feature, path) =>
           val rawStack = feature :: rawEnclosing
-          val featureStack = rawStack.take(fsTrie((rawStack).map(_.func.name)))
+          val featureStack =
+            rawStack.take(targetFeatSet((rawStack).map(_.func.name)))
           if featureStack.isEmpty then None
           else Some((featureStack.tail, featureStack.head, path))
       }
@@ -234,7 +241,8 @@ case class Coverage(
       val view: View = rawView.flatMap {
         case (rawEnclosing, feature, path) =>
           val rawStack = feature :: rawEnclosing
-          val featureStack = rawStack.take(fsTrie((rawStack).map(_.func.name)))
+          val featureStack =
+            rawStack.take(targetFeatSet((rawStack).map(_.func.name)))
           if featureStack.isEmpty then None
           else Some((featureStack.tail, featureStack.head, path))
       }
@@ -254,7 +262,7 @@ case class Coverage(
         ConformTest.createTest(cfg, finalSt),
         touchedNodeViews.keys,
         touchedCondViews.keys,
-        minifiable = Some(isMinifierHit),
+        minifiable = isMinifierHit,
       )
 
     // TODO: impl checkWithBlocking using `blockingScripts`
@@ -273,12 +281,10 @@ case class Coverage(
     val Script(code, _, _, _, _) = script
     val strictCode = USE_STRICT + code
     val isMinifierHitOptFuture = Future {
-      if (isSelective)
-        if (useSrv)
-          Some(Minifier.checkMinifyDiffSrv(strictCode, minifyCmd))
-        else
-          Some(Minifier.checkMinifyDiff(strictCode, minifyCmd))
-      else None
+      if (useSrv)
+        Minifier.checkMinifyDiffSrv(strictCode, minifyCmd)
+      else
+        Minifier.checkMinifyDiff(strictCode, minifyCmd)
     }
 
     val initSt = cfg.init.from(code)
@@ -302,7 +308,8 @@ case class Coverage(
       val view: View = rawView.flatMap {
         case (rawEnclosing, feature, path) =>
           val rawStack = feature :: rawEnclosing
-          val featureStack = rawStack.take(fsTrie((rawStack).map(_.func.name)))
+          val featureStack =
+            rawStack.take(targetFeatSet((rawStack).map(_.func.name)))
           if featureStack.isEmpty then None
           else Some((featureStack.tail, featureStack.head, path))
       }
@@ -311,11 +318,9 @@ case class Coverage(
       getScript(nodeView) match
         case None =>
           update(nodeView, script); updated = true; covered = true
-          addRawNodeView(rawNodeView, script)
         case Some(originalScript) if originalScript.code.length > code.length =>
           update(nodeView, script)
           updated = true
-          addRawNodeView(rawNodeView, script)
         case Some(blockScript) => ()
 
     // update branch coverage
@@ -325,7 +330,8 @@ case class Coverage(
       val view: View = rawView.flatMap {
         case (rawEnclosing, feature, path) =>
           val rawStack = feature :: rawEnclosing
-          val featureStack = rawStack.take(fsTrie((rawStack).map(_.func.name)))
+          val featureStack =
+            rawStack.take(targetFeatSet((rawStack).map(_.func.name)))
           if featureStack.isEmpty then None
           else Some((featureStack.tail, featureStack.head, path))
       }
@@ -334,23 +340,21 @@ case class Coverage(
       getScript(condView) match
         case None =>
           update(condView, nearest, script); updated = true; covered = true
-          addRawCondView(rawCondView, nearest, script)
         case Some(origScript) if origScript.code.length > code.length =>
           update(condView, nearest, script)
           updated = true
-          addRawCondView(rawCondView, nearest, script)
         case Some(blockScript) => ()
 
     val isMinifierHitOpt = Await.result(isMinifierHitOptFuture, Duration.Inf)
 
     isMinifierHitOpt match
-      case Some(true)  => fsTrie.touchWithHit(rawStacks)
-      case Some(false) => fsTrie.touchWithMiss(rawStacks)
+      case Some(true)  => targetFeatSet.touchWithHit(rawStacks)
+      case Some(false) => targetFeatSet.touchWithMiss(rawStacks)
       case _           => /* do nothing */
-    if (fsTreeConfig.doCleanup)
-      val (promotedStacks, demotedStacks) = fsTrie.flushPrmDemStacks()
-      handlePromotion(promotedStacks)
-      cleanup(demotedStacks)
+    // if (targetFeatureSetConfig.doCleanup)
+    //   val (promotedStacks, demotedStacks) = targetFeatSet.flushPrmDemStacks()
+    //   handlePromotion(promotedStacks)
+    //   cleanup(demotedStacks)
 
     if (updated)
       _minimalInfo += script.name -> ScriptInfo(
@@ -394,7 +398,8 @@ case class Coverage(
       val view: View = rawView.flatMap {
         case (rawEnclosing, feature, path) =>
           val rawStack = feature :: rawEnclosing
-          val featureStack = rawStack.take(fsTrie((rawStack).map(_.func.name)))
+          val featureStack =
+            rawStack.take(targetFeatSet((rawStack).map(_.func.name)))
           if featureStack.isEmpty then None
           else Some((featureStack.tail, featureStack.head, path))
       }
@@ -418,7 +423,8 @@ case class Coverage(
       val view: View = rawView.flatMap {
         case (rawEnclosing, feature, path) =>
           val rawStack = feature :: rawEnclosing
-          val featureStack = rawStack.take(fsTrie((rawStack).map(_.func.name)))
+          val featureStack =
+            rawStack.take(targetFeatSet((rawStack).map(_.func.name)))
           if featureStack.isEmpty then None
           else Some((featureStack.tail, featureStack.head, path))
       }
@@ -553,11 +559,11 @@ case class Coverage(
     dumpJson(
       name = "constructor",
       data = CoverageConstructor(
-        fsTreeConfig.maxSensitivity,
+        targetFeatureSetConfig.maxSensitivity,
         cp,
         timeLimit,
-        fsTreeConfig.promotionThreshold,
-        fsTreeConfig.demotionThreshold,
+        targetFeatureSetConfig.promotionThreshold,
+        targetFeatureSetConfig.demotionThreshold,
       ),
       filename = s"$baseDir/constructor.json",
       noSpace = false,
@@ -657,24 +663,15 @@ case class Coverage(
       )
       log("dumped unreachable functions")
     if (withFStrie)
-      import fsTrie.given
-      val fsTrieConfig = fsTrie.config
-      val fsTrieRoot = fsTrie.root
+      import TargetFeatureSet.given
       dumpJson(
-        name = "fstrie config",
-        data = fsTrieConfig,
-        filename = s"$baseDir/fstrie-config.json",
+        name = "target feature set",
+        data = targetFeatSet,
+        filename = s"$baseDir/tfset.json",
         noSpace = false,
         silent = silent,
       )
-      dumpJson(
-        name = "fstrie root",
-        data = fsTrieRoot,
-        filename = s"$baseDir/fstrie-root.json",
-        noSpace = false,
-        silent = silent,
-      )
-      log("dumped fstriewrapper")
+      log("dumped target feature set")
 
   /** conversion to string */
   private def percent(n: Double, t: Double): Double = n / t * 100
@@ -684,7 +681,7 @@ case class Coverage(
       app :> "- node: " >> nodeCov
       app :> "- branch: " >> branchCov
     }
-    if (fsTreeConfig.maxSensitivity > 0)
+    if (targetFeatureSetConfig.maxSensitivity > 0)
       (app :> "- sensitive coverage:").wrap("", "") {
         app :> "- node: " >> nodeViewCov
         app :> "- branch: " >> branchViewCov
@@ -935,21 +932,20 @@ object Coverage {
   def fromLogSimpl(baseDir: String, cfg: CFG): Coverage =
     val jsonProtocol = JsonProtocol(cfg)
     import jsonProtocol.given
-    given fsTrieConfigDecoder: Decoder[FSTreeConfig] = deriveDecoder
+    import TargetFeatureSet.given
 
     def readJsonHere[T](json: String)(using Decoder[T]) =
       readJson[T](s"$baseDir/$json")
 
     val con: CoverageConstructor = readJsonHere("constructor.json")
-    val fsTreeConfig = readJsonHere[FSTreeConfig]("fstrie-config.json")
+    val targetFeatureSet = readJsonHere[TargetFeatureSet]("tfset.json")
     val cov = new Coverage(
       cfg = cfg,
       cp = con.cp,
       timeLimit = con.timeLimit,
-      fsTreeConfig = fsTreeConfig,
+      targetFeatureSetConfig = targetFeatureSet.config,
     )
-    cov.fsTrie.replaceRootFromFile(f"$baseDir/fstrie-root.json")
-    cov.fsTrie.fixed = true
+    cov.targetFeatSet = targetFeatureSet
 
     val minimalFiles = listFiles(s"$baseDir/minimal")
     println(

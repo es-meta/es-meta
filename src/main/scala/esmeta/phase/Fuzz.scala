@@ -10,6 +10,7 @@ import esmeta.es.util.fuzzer.{Fuzzer, FSTreeConfig}
 import esmeta.es.util.{UnitWalker, Coverage, ValidityChecker}
 import esmeta.spec.util.GrammarGraph
 import scala.collection.mutable.ArrayBuffer
+import esmeta.es.util.fuzzer.TargetFeatureSetConfig
 
 /** `fuzz` phase */
 case object Fuzz extends Phase[CFG, Coverage] {
@@ -34,7 +35,7 @@ case object Fuzz extends Phase[CFG, Coverage] {
       timeLimit = config.timeLimit,
       trial = config.trial,
       duration = config.duration,
-      fsTreeConfig = FSTreeConfig(
+      targetFeatSetConfig = TargetFeatureSetConfig(
         maxSensitivity = config.kFs,
       ),
       cp = config.cp,

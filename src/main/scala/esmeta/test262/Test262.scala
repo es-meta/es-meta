@@ -130,7 +130,7 @@ case class Test262(
     lazy val cov = Coverage(
       cfg = cfg,
       timeLimit = timeLimit,
-      fsTreeConfig = FSTreeConfig(),
+      targetFeatureSetConfig = TargetFeatureSetConfig(),
     )
 
     // run tests with logging

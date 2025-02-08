@@ -7,7 +7,7 @@ import esmeta.CommandConfig
 import esmeta.util.*
 import esmeta.util.BaseUtils.*
 import esmeta.spec.util.GrammarGraph
-import esmeta.es.util.fuzzer.{Fuzzer, MinifyFuzzer, FSTreeConfig}
+import esmeta.es.util.fuzzer.{Fuzzer, MinifyFuzzer, TargetFeatureSetConfig}
 import esmeta.js.minifier.Minifier
 import esmeta.injector.Injector
 import scala.util.*
@@ -43,21 +43,11 @@ case object MinifyFuzz extends Phase[CFG, Coverage] {
       duration = config.duration,
       cp = config.cp,
       init = config.init,
-      fsTreeConfig = FSTreeConfig(
+      targetFeatSetConfig = TargetFeatureSetConfig(
         maxSensitivity = config.kFs,
         promotionThreshold = config.proThreshold,
         demotionThreshold = config.demThreshold,
-        minTouch = config.fsMinTouch,
-        oneSided = config.oneSided,
-        isSelective = config.isSelectiveOpt
-          .getOrElse {
-            println(
-              "Sensitivity type is not set. Use selective by default.",
-            )
-            true
-          },
         useSrv = config.useSrv,
-        useLocalCorrelation = config.useLocalCorrelation,
         doCleanup = config.doCleanup,
       ),
       keepBugs = config.keepBugs,
@@ -115,20 +105,6 @@ case object MinifyFuzz extends Phase[CFG, Coverage] {
       "set the specific seed for the random number generator (default: None).",
     ),
     (
-      "sens-type",
-      StrOption((c, s) =>
-        c.isSelectiveOpt = Some(
-          s match {
-            case "selective" => true
-            case "uniform"   => false
-            case _ =>
-              error("invalid sensitivity type: please set selective or uniform")
-          },
-        ),
-      ),
-      "set the sensitivity type: selective or uniform",
-    ),
-    (
       "cp",
       BoolOption(c => c.cp = true),
       "turn on the call-path mode (default: false) (meaningful if k-fs > 0).",
@@ -168,16 +144,6 @@ case object MinifyFuzz extends Phase[CFG, Coverage] {
       "set the demotion significant level (default: 0.05).",
     ),
     (
-      "fs-min-touch",
-      NumOption((c, k) => c.fsMinTouch = k),
-      "set the minimum touch for feature sensitivity (default: 10).",
-    ),
-    (
-      "two-sided",
-      BoolOption(c => c.oneSided = false),
-      "turn on the two-sided mode for selective feature sensitivity (default: one-sided).",
-    ),
-    (
       "keep-bugs",
       BoolOption(c => c.keepBugs = true),
       "keep the bugs in the generated programs (default: false).",
@@ -196,18 +162,6 @@ case object MinifyFuzz extends Phase[CFG, Coverage] {
       "use-cli",
       BoolOption(c => c.useSrv = false),
       "use the CLI to transpile scripts (default: server).",
-    ),
-    (
-      "correlation-type",
-      StrOption((c, s) =>
-        c.useLocalCorrelation = s match {
-          case "local"  => true
-          case "global" => false
-          case _ =>
-            error("invalid correlation type: please set local or global")
-        },
-      ),
-      "set the correlation type: local or global",
     ),
     (
       "no-cleanup",
@@ -230,13 +184,10 @@ case object MinifyFuzz extends Phase[CFG, Coverage] {
     var cp: Boolean = false,
     var proThreshold: Double = chiSqDistTable("0.01"),
     var demThreshold: Double = chiSqDistTable("0.05"),
-    var fsMinTouch: Int = 10,
-    var oneSided: Boolean = true,
     var keepBugs: Boolean = false,
     var minifier: Option[String] = None,
     var onlineTest: Boolean = false,
     var useSrv: Boolean = true,
-    var useLocalCorrelation: Boolean = false,
     var doCleanup: Boolean = true,
   )
 }

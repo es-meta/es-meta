@@ -38,7 +38,7 @@ object MinifyFuzzer {
     duration: Option[Int] = None, // `None` denotes no bound
     init: Option[String] = None,
     cp: Boolean = false,
-    fsTreeConfig: FSTreeConfig,
+    targetFeatSetConfig: TargetFeatureSetConfig,
     keepBugs: Boolean = false,
     minifyCmd: Option[String] = None,
     onlineTest: Boolean = false,
@@ -52,7 +52,7 @@ object MinifyFuzzer {
     duration = duration,
     init = init,
     cp = cp,
-    fsTreeConfig = fsTreeConfig,
+    targetFeatSetConfig = targetFeatSetConfig,
     keepBugs = keepBugs,
     minifyCmd = minifyCmd,
     onlineTest = onlineTest,
@@ -74,7 +74,7 @@ class MinifyFuzzer(
   duration: Option[Int] = None, // `None` denotes no bound
   init: Option[String] = None,
   cp: Boolean = false,
-  fsTreeConfig: FSTreeConfig,
+  targetFeatSetConfig: TargetFeatureSetConfig,
   keepBugs: Boolean = false,
   minifyCmd: Option[String] = None,
   onlineTest: Boolean = false,
@@ -130,7 +130,7 @@ class MinifyFuzzer(
     duration = duration,
     init = init,
     cp = cp,
-    fsTreeConfig = fsTreeConfig,
+    targetFeatSetConfig = targetFeatSetConfig,
     minifyCmd = minifyCmd,
   ) {
     override lazy val logDir = MinifyFuzzer.logDir(minifyCmd)
