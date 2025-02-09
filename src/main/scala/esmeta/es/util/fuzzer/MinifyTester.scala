@@ -25,13 +25,12 @@ class MinifyTester(
 ) {
   val MinifyTesterConfig(timeLimit, ignoreProperties, debugLevel) = config
 
-  def dd(code: String): String =
-    test(code) match
-      case Some(AssertionFailure(original, minified, injected, reason)) =>
-        DeltaDebugger(cfg, test(_).fold(false)(!_.isSuccess), debugLevel > 1)
-          .result(original)
-      case Some(_: AssertionSuccess) => log("minify-tester", "pass"); code
-      case _                         => log("minify-tester", "invalid"); code
+  def dd(code: String): String = test(code) match
+    case Some(AssertionFailure(original, minified, injected, reason)) =>
+      DeltaDebugger(cfg, test(_).fold(false)(!_.isSuccess), debugLevel > 1)
+        .result(original)
+    case Some(_: AssertionSuccess) => log("minify-tester", "pass"); code
+    case _                         => log("minify-tester", "invalid"); code
 
   def test(code: String): Option[MinifyTestResult] =
     // Minifier.minifySwc(code)
@@ -44,7 +43,7 @@ class MinifyTester(
             code,
             "",
             "",
-            exception.toString,
+            "[Transpiler Crash]\n" ++ exception.toString,
           ),
         )
       case Success(minified) => {
@@ -96,7 +95,7 @@ class MinifyTester(
                     code,
                     minified,
                     injected,
-                    exception,
+                    "[Transpiled Program Error]\n" ++ exception,
                   ),
                 )
           case Success(i) =>
@@ -134,7 +133,7 @@ class MinifyTester(
                   code,
                   minified,
                   injected.toString,
-                  s"exit tag is not normal: $originalExitTag",
+                  s"injected exit tag is not normal: $originalExitTag",
                 ),
               )
           case Failure(exception) =>
