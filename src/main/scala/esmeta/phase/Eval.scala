@@ -7,7 +7,6 @@ import esmeta.ty.{*, given}
 import esmeta.state.*
 import esmeta.util.*
 import esmeta.util.SystemUtils.*
-import esmeta.es.*
 import scala.collection.mutable.{Map => MMap}
 
 /** `eval` phase */
@@ -31,7 +30,7 @@ case object Eval extends Phase[CFG, State] {
         if jsFilter(filename)
       } st = run(cfg, config, filename)
       if (config.tyCheck)
-        val pw = getPrintWriter(EVAL_LOG_DIR)
+        val pw = getPrintWriter(s"$EVAL_LOG_DIR/errors")
         val sorted: Vector[TypeError] =
           totalErrors.iterator.toVector
             .sortBy { case (_, tests) => -tests.size }
@@ -40,7 +39,7 @@ case object Eval extends Phase[CFG, State] {
         for { error <- sorted } do {
           pw.println(error)
           pw.println(s"- Found in ${totalErrors(error).size} file(s)")
-          val sample = totalErrors(error).head.drop(BASE_DIR.length + 1)
+          val sample = totalErrors(error).head
           pw.println(s"  - sample: ${sample}")
           pw.println(LINE_SEP)
           pw.flush
