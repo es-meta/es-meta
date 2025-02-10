@@ -172,7 +172,7 @@ sealed trait ValueTy extends Ty with Lattice[ValueTy] {
         case obj: RecordObj => record.contains(obj, heap)
         case obj: MapObj    => map.contains(obj, heap)
         case obj: ListObj   => list.contains(obj, heap)
-        case obj: YetObj    => throw NotSupported(Feature)(obj.msg)
+        case obj: YetObj    => true // throw NotSupported(Feature)(obj.msg)
     case Clo(func, captured)             => clo contains func.irFunc.name
     case Cont(func, captured, callStack) => cont contains func.id
     case v: AstValue                     => ast.contains(v)
