@@ -66,7 +66,9 @@ case class TargetFeatureSet(
 
   def touchWithHit(stacks: Iterable[List[String]]): Unit =
     stacks.foreach {
-      _.foreach { feature =>
+      _.take(
+        config.maxSensitivity,
+      ).foreach { feature =>
         val tmpData = targetFeatureMap.getOrElse(feature, TargetFeatureData())
         tmpData.hit(
           rootHits,
@@ -80,7 +82,9 @@ case class TargetFeatureSet(
 
   def touchWithMiss(stacks: Iterable[List[String]]): Unit =
     stacks.foreach {
-      _.foreach { feature =>
+      _.take(
+        config.maxSensitivity,
+      ).foreach { feature =>
         val tmpData = targetFeatureMap.getOrElse(feature, TargetFeatureData())
         tmpData.miss(
           rootHits,
