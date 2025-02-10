@@ -32,12 +32,8 @@ class Interpreter(
   val detail: Boolean = false,
   val logPW: Option[PrintWriter] = None,
   val timeLimit: Option[Int] = None,
-  val tyCheck: Boolean = false,
 ) {
   import Interpreter.*
-
-  /** base state */
-  val baseSt: State = st.copied
 
   /** initial time */
   lazy val startTime: Long = System.currentTimeMillis
@@ -48,12 +44,6 @@ class Interpreter(
   /** final state */
   lazy val result: State =
     while (step) {}
-    if (tyCheck)
-      val dtc = new TypeChecker(baseSt)
-      while (dtc.step) {}
-      for (error <- dtc.errors)
-        println(error)
-        println(LINE_SEP)
     if (log)
       pw.println(st)
       pw.close
@@ -477,8 +467,7 @@ object Interpreter {
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-    tyCheck: Boolean = false,
-  ): State = new Interpreter(st, log, detail, logPW, timeLimit, tyCheck).result
+  ): State = new Interpreter(st, log, detail, logPW, timeLimit).result
 
   /** transition for lexical SDO */
   def eval(lex: Lexical, sdoName: String): Value = {

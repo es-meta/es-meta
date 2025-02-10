@@ -17,8 +17,13 @@ class TypeChecker(st: State) extends Interpreter(st) {
   import tyStringifier.given
 
   // detected type errors while dynamic type checking
-  val errors: MSet[TypeError] = MSet()
+  private val errors: MSet[TypeError] = MSet()
   protected def addError(error: TypeError): Unit = errors += error
+
+  // final state with collected type errors
+  lazy val collect: (State, Set[TypeError]) =
+    while (step) {}
+    (st, errors.toSet)
 
   // transition for normal instructions (overrided for parameter type checking)
   override def eval(inst: NormalInst): Unit = inst match {
@@ -70,4 +75,8 @@ class TypeChecker(st: State) extends Interpreter(st) {
     aux(params, args)
     map
   }
+}
+
+object TypeChecker {
+  def apply(st: State): (State, Set[TypeError]) = new TypeChecker(st).collect
 }

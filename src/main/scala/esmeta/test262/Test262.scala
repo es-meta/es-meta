@@ -149,32 +149,6 @@ case class Test262(
     val tyStringifier = TyElem.getStringifier(true, false)
     import tyStringifier.given
 
-    // detected type errors while dynamic type checking
-    val totalErrors: MMap[TypeError, MSet[Test]] = MMap()
-    def addErrors(errors: MSet[TypeError], test: Test): Unit =
-      val taggedErrors = errors.map(error => error -> test)
-      for ((error, test) <- taggedErrors) totalErrors.get(error) match
-        case Some(tests) => tests += test
-        case None        => totalErrors += (error -> MSet(test))
-
-    // helper dump function for type errors
-    def dumpTypeErrors(baseDir: String): Unit =
-      val dtcPW = getPrintWriter(s"$baseDir/errors")
-      val sorted: Vector[TypeError] =
-        totalErrors.iterator.toVector
-          .sortBy { case (_, tests) => -tests.size }
-          .map(_._1)
-      dtcPW.println(s"${sorted.length} type errors detected in Test262 tests")
-      dtcPW.println(LINE_SEP)
-      for { error <- sorted } do {
-        dtcPW.println(error)
-        dtcPW.println(s"- Found in ${totalErrors(error).size} test(s)")
-        dtcPW.println(s"  - sample: ${totalErrors(error).head.relName}")
-        dtcPW.println(LINE_SEP)
-        dtcPW.flush
-      }
-      dtcPW.close()
-
     // get progress bar for extracted tests
     val progressBar = getProgressBar(
       name = "eval",
@@ -204,14 +178,16 @@ case class Test262(
       // check final execution status of each Test262 test
       check = test =>
         val filename = test.path
-        if (tyCheck)
-          val (ast, code) = loadTest(filename)
-          val dtc = new TypeChecker(cfg.init.from(code, ast))
-          while (dtc.step) {}
-          addErrors(dtc.errors, test)
         val st =
           if (!useCoverage)
-            evalFile(filename, log && !multiple, detail, Some(logPW), timeLimit)
+            evalFile(
+              filename,
+              log && !multiple,
+              detail,
+              Some(logPW),
+              timeLimit,
+              tyCheck,
+            )
           else {
             val (ast, code) = loadTest(filename)
             cov.runAndCheck(Script(code, filename), ast)._1
@@ -297,9 +273,10 @@ case class Test262(
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
+    tyCheck: Boolean,
   ): State =
     val (ast, code) = loadTest(filename)
-    eval(code, ast, log, detail, logPW, timeLimit)
+    eval(code, ast, log, detail, logPW, timeLimit, filename, tyCheck)
 
   // eval ECMAScript code
   private def eval(
@@ -309,15 +286,25 @@ case class Test262(
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
+    filename: String,
+    tyCheck: Boolean,
   ): State =
     val st = cfg.init.from(code, ast)
-    Interpreter(
-      st = st,
-      log = log,
-      detail = detail,
-      logPW = logPW,
-      timeLimit = timeLimit,
-    )
+    if (tyCheck) {
+      val (finalSt, errors) = TypeChecker(st)
+      for { error <- errors } do {
+        val updated = totalErrors.getOrElse(error, Set()) + filename
+        totalErrors += error -> updated
+      }
+      finalSt
+    } else
+      Interpreter(
+        st = st,
+        log = log,
+        detail = detail,
+        logPW = logPW,
+        timeLimit = timeLimit,
+      )
 
   // logging mode for tests
   private def logForTests(
@@ -352,5 +339,26 @@ case class Test262(
 
     // post job
     postJob(logDir)
+
+  // detected type errors while dynamic type checking
+  private val totalErrors: MMap[TypeError, Set[String]] = MMap()
+
+  // helper dump function for type errors
+  private def dumpTypeErrors(baseDir: String): Unit =
+    val dtcPW = getPrintWriter(s"$baseDir/errors")
+    val sorted: Vector[TypeError] =
+      totalErrors.iterator.toVector
+        .sortBy { case (_, tests) => -tests.size }
+        .map(_._1)
+    dtcPW.println(s"${sorted.length} type errors detected." + LINE_SEP)
+    for { error <- sorted } do {
+      dtcPW.println(error)
+      dtcPW.println(s"- Found in ${totalErrors(error).size} test(s)")
+      val sample = totalErrors(error).head.drop(TEST262_TEST_DIR.length + 1)
+      dtcPW.println(s"  - sample: ${sample}")
+      dtcPW.println(LINE_SEP)
+      dtcPW.flush
+    }
+    dtcPW.close()
 }
 object Test262 extends Git(TEST262_DIR)

@@ -3,21 +3,26 @@ package esmeta.phase
 import esmeta.*
 import esmeta.cfg.CFG
 import esmeta.interpreter.*
+import esmeta.ty.{*, given}
 import esmeta.state.*
 import esmeta.util.*
 import esmeta.util.SystemUtils.*
 import esmeta.es.*
+import scala.collection.mutable.{Map => MMap}
 
 /** `eval` phase */
 case object Eval extends Phase[CFG, State] {
   val name = "eval"
   val help = "evaluates an ECMAScript file."
+
+  val totalErrors: MMap[TypeError, Set[String]] = MMap()
+
   def apply(
     cfg: CFG,
     cmdConfig: CommandConfig,
     config: Config,
   ): State =
-    if (config.multiple)
+    if (config.multiple) {
       var st = State(cfg, Context(cfg.main))
       for {
         path <- cmdConfig.targets
@@ -25,16 +30,41 @@ case object Eval extends Phase[CFG, State] {
         filename = file.toString
         if jsFilter(filename)
       } st = run(cfg, config, filename)
+      if (config.tyCheck)
+        val pw = getPrintWriter(EVAL_LOG_DIR)
+        val sorted: Vector[TypeError] =
+          totalErrors.iterator.toVector
+            .sortBy { case (_, tests) => -tests.size }
+            .map(_._1)
+        pw.println(s"${sorted.length} type errors detected." + LINE_SEP)
+        for { error <- sorted } do {
+          pw.println(error)
+          pw.println(s"- Found in ${totalErrors(error).size} file(s)")
+          val sample = totalErrors(error).head.drop(BASE_DIR.length + 1)
+          pw.println(s"  - sample: ${sample}")
+          pw.println(LINE_SEP)
+          pw.flush
+        }
       st
-    else run(cfg, config, getFirstFilename(cmdConfig, this.name))
+    } else run(cfg, config, getFirstFilename(cmdConfig, this.name))
 
-  def run(cfg: CFG, config: Config, filename: String): State = Interpreter(
-    cfg.init.fromFile(filename),
-    log = config.log,
-    detail = config.detail,
-    timeLimit = config.timeLimit,
-    tyCheck = config.tyCheck,
-  )
+  def run(cfg: CFG, config: Config, filename: String): State =
+    if (config.tyCheck) {
+      val (finalSt, errors) = TypeChecker(cfg.init.fromFile(filename))
+      if (config.multiple) {
+        for { error <- errors } do {
+          val updated = totalErrors.getOrElse(error, Set()) + filename
+          totalErrors += error -> updated
+        }
+      } else for (error <- errors) println(error.toString + LINE_SEP)
+      finalSt
+    } else
+      Interpreter(
+        cfg.init.fromFile(filename),
+        log = config.log,
+        detail = config.detail,
+        timeLimit = config.timeLimit,
+      )
 
   def defaultConfig: Config = Config()
   val options: List[PhaseOption[Config]] = List(
