@@ -49,7 +49,10 @@ case object Eval extends Phase[CFG, State] {
 
   def run(cfg: CFG, config: Config, filename: String): State =
     if (config.tyCheck) {
-      val (finalSt, errors) = TypeChecker(cfg.init.fromFile(filename))
+      val (finalSt, errors) = TypeChecker(
+        cfg.init.fromFile(filename),
+        config.timeLimit,
+      )
       if (config.multiple) {
         for { error <- errors } do {
           val updated = totalErrors.getOrElse(error, Set()) + filename

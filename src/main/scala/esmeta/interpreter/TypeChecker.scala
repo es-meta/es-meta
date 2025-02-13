@@ -11,7 +11,8 @@ import esmeta.util.BaseUtils.error
 import scala.collection.mutable.{Map => MMap, Set => MSet}
 
 /** dynamic type checker extension of IR interpreter */
-class TypeChecker(st: State) extends Interpreter(st) {
+class TypeChecker(st: State, timeLimit: Option[Int])
+  extends Interpreter(st, false, false, None, timeLimit) {
 
   val tyStringifier = TyElem.getStringifier(true, false)
   import tyStringifier.given
@@ -78,5 +79,9 @@ class TypeChecker(st: State) extends Interpreter(st) {
 }
 
 object TypeChecker {
-  def apply(st: State): (State, Set[TypeError]) = new TypeChecker(st).collect
+  def apply(
+    st: State,
+    timeLimit: Option[Int],
+  ): (State, Set[TypeError]) =
+    new TypeChecker(st, timeLimit).collect
 }

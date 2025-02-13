@@ -291,7 +291,7 @@ case class Test262(
   ): State =
     val st = cfg.init.from(code, ast)
     if (tyCheck) {
-      val (finalSt, errors) = TypeChecker(st)
+      val (finalSt, errors) = TypeChecker(st, timeLimit)
       for { error <- errors } do {
         val updated = totalErrors.getOrElse(error, Set()) + filename
         totalErrors += error -> updated
