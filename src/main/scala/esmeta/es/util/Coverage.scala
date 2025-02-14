@@ -5,6 +5,7 @@ import esmeta.cfg.*
 import esmeta.injector.*
 import esmeta.interpreter.*
 import esmeta.ir.{Expr, EParse, EBool}
+import esmeta.ty.{*, given}
 import esmeta.es.*
 import esmeta.es.util.*
 import esmeta.es.util.Coverage.Interp
@@ -16,6 +17,7 @@ import io.circe.*, io.circe.syntax.*
 /** coverage measurement of cfg */
 case class Coverage(
   cfg: CFG,
+  tyCheck: Boolean = false,
   kFs: Int = 0,
   cp: Boolean = false,
   timeLimit: Option[Int] = None,
@@ -25,9 +27,16 @@ case class Coverage(
   val jsonProtocol: JsonProtocol = JsonProtocol(cfg)
   import jsonProtocol.given
 
+  val tyStringifier = TyElem.getStringifier(true, false)
+  import tyStringifier.given
+
   // minimal scripts
   def minimalScripts: Set[Script] = _minimalScripts
   private var _minimalScripts: Set[Script] = Set()
+
+  // detected type errors
+  def errorMap: Map[String, Set[TypeError]] = _errorMap
+  private var _errorMap: Map[String, Set[TypeError]] = Map()
 
   // meta-info of each script
   private var _minimalInfo: Map[String, ScriptInfo] = Map()
@@ -78,7 +87,7 @@ case class Coverage(
   /** evaluate a given ECMAScript program */
   def run(code: String, ast: Ast, name: Option[String]): Interp =
     val initSt = cfg.init.from(code, ast, name)
-    val interp = Interp(initSt, kFs, cp, timeLimit)
+    val interp = Interp(initSt, tyCheck, kFs, cp, timeLimit)
     interp.result; interp
 
   def check(script: Script, interp: Interp): (State, Boolean, Boolean) = {
@@ -121,6 +130,7 @@ case class Coverage(
         touchedNodeViews.keys,
         touchedCondViews.keys,
       )
+      _errorMap += script.name -> interp.errors
 
     // TODO: impl checkWithBlocking using `blockingScripts`
     (finalSt, updated, covered)
@@ -231,6 +241,19 @@ case class Coverage(
         filename = s"$baseDir/unreach-funcs",
       )
       log("dumped unreachable functions")
+    if (tyCheck)
+      dumpJson(
+        name = "minimal detected type errors",
+        data = _errorMap
+          .filter(_._2.nonEmpty)
+          .map((name, errors) =>
+            name -> errors.map(_.toString),
+          ) // !TODO: Minimize error message
+          .asJson,
+        filename = s"$baseDir/minimal-errors.json",
+        noSpace = false,
+      )
+      log("Dumped type errors")
   }
 
   /** conversion to string */
@@ -349,10 +372,11 @@ case class Coverage(
 object Coverage {
   class Interp(
     initSt: State,
+    tyCheck: Boolean,
     kFs: Int,
     cp: Boolean,
     timeLimit: Option[Int],
-  ) extends Interpreter(initSt, timeLimit = timeLimit) {
+  ) extends Interpreter(initSt, tyCheck = tyCheck, timeLimit = timeLimit) {
     var touchedNodeViews: Map[NodeView, Option[Nearest]] = Map()
     var touchedCondViews: Map[CondView, Option[Nearest]] = Map()
 

@@ -18,11 +18,13 @@ import java.util.concurrent.TimeoutException
 import scala.collection.mutable.{ListBuffer, Map => MMap}
 import scala.collection.parallel.CollectionConverters._
 import scala.util.*
+import scala.collection.immutable.Map
 
 /** ECMAScript program fuzzer with ECMA-262 */
 object Fuzzer {
   def apply(
     cfg: CFG,
+    tyCheck: Boolean = false,
     log: Boolean = false, // logging mode on/off
     logInterval: Int = 600, // default is 600 s (10 m).
     debug: Int = NO_DEBUG, // 2: all, 1: partial, 0: no-debug
@@ -35,6 +37,7 @@ object Fuzzer {
     cp: Boolean = false,
   ): Coverage = new Fuzzer(
     cfg,
+    tyCheck,
     log,
     logInterval,
     debug,
@@ -56,6 +59,7 @@ object Fuzzer {
 /** extensible helper of ECMAScript program fuzzer with ECMA-262 */
 class Fuzzer(
   cfg: CFG,
+  tyCheck: Boolean,
   log: Boolean,
   logInterval: Int,
   debug: Int,
@@ -242,6 +246,7 @@ class Fuzzer(
   /** coverage */
   val cov: Coverage = Coverage(
     cfg,
+    tyCheck,
     kFs,
     cp,
     timeLimit,
@@ -340,6 +345,12 @@ class Fuzzer(
     if (kFs > 0) header ++= Vector(s"sens-node(#)", s"sens-branch(#)")
     header ++= Vector("target-conds(#)")
     if (kFs > 0) header ++= Vector(s"sens-target-conds(#)")
+    if (tyCheck)
+      header ++= Vector(
+        s"detected-true-positive(#)",
+        s"detected-false-negative(#)",
+        s"trigger-failure(#)",
+      )
     addRow(header)
   private def genStatHeader(keys: List[String], nf: PrintWriter) =
     var header1 = Vector("iter(#)")
@@ -376,10 +387,19 @@ class Fuzzer(
     val bv = cov.branchViewCov
     val tc = cov.targetCondViews.size
     val tcv = cov.targetCondViews.map(_._2.size).fold(0)(_ + _)
+    val detected = cov.errorMap.values.fold(Set.empty)(_ ++ _)
+    // !TODO: Parse error-logs(String) to Set[TypeError] then use it for the following
+    // val dtp = (detected intersect known).size
+    // val dfn = detected.size - dtp
+    // val tf: Int = (known diff detected)
+    //   .map(_.point.node)
+    //   .filter(cov.apply(_).nonEmpty)
+    //   .size
     var row = Vector(iter, e, t, visited.size, pool.size, n, b)
     if (kFs > 0) row ++= Vector(nv, bv)
     row ++= Vector(tc)
     if (kFs > 0) row ++= Vector(tcv)
+    // if (tyCheck) row ++= Vector(dtp, dfn, tf)
     addRow(row)
     // dump coveragge
     cov.dumpToWithDetail(logDir, withMsg = (debug == ALL))

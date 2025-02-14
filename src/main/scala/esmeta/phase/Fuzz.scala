@@ -30,6 +30,7 @@ case object Fuzz extends Phase[CFG, Coverage] {
     // run the fuzzer to get the coverage information
     val cov = Fuzzer(
       cfg = cfg,
+      tyCheck = config.tyCheck,
       log = config.log,
       logInterval = config.logInterval,
       debug = config.debug,
@@ -47,6 +48,11 @@ case object Fuzz extends Phase[CFG, Coverage] {
 
   def defaultConfig: Config = Config()
   val options: List[PhaseOption[Config]] = List(
+    (
+      "type-check",
+      BoolOption(_.tyCheck = _),
+      "perform dynamic type checking.",
+    ),
     (
       "log",
       BoolOption((c, b) => c.log = b),
@@ -92,11 +98,6 @@ case object Fuzz extends Phase[CFG, Coverage] {
       "set the specific seed for the random number generator (default: None).",
     ),
     (
-      "cp",
-      BoolOption((c, b) => c.cp = b),
-      "turn on the call-path mode (default: false) (meaningful if k-fs > 0).",
-    ),
-    (
       "init",
       StrOption((c, s) => c.init = Some(s)),
       "explicitly use the given init pool",
@@ -106,8 +107,14 @@ case object Fuzz extends Phase[CFG, Coverage] {
       NumOption((c, k) => c.kFs = k),
       "set the k-value for feature sensitivity (default: 0).",
     ),
+    (
+      "cp",
+      BoolOption((c, b) => c.cp = b),
+      "turn on the call-path mode (default: false) (meaningful if k-fs > 0).",
+    ),
   )
   case class Config(
+    var tyCheck: Boolean = false,
     var log: Boolean = false,
     var logInterval: Int = 600,
     var out: Option[String] = None,

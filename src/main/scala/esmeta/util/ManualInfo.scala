@@ -4,7 +4,7 @@ import esmeta.MANUALS_DIR
 import esmeta.analyzer.tychecker.TyChecker.Ignore
 import esmeta.spec.Spec
 import esmeta.test262.util.ManualConfig
-import esmeta.ty.TyModel
+import esmeta.ty.*
 import esmeta.util.BaseUtils.*
 import esmeta.util.SystemUtils.*
 import java.io.File
