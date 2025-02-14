@@ -22,14 +22,16 @@ import java.io.PrintWriter
 import java.math.MathContext.DECIMAL128
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
-import scala.collection.mutable.{Map => MMap}
+import scala.collection.mutable.{Map => MMap, Set => MSet}
 import scala.math.{BigInt => SBigInt}
+import esmeta.util.BaseUtils
 
 /** extensible helper of IR interpreter with a CFG */
 class Interpreter(
   val st: State,
   val log: Boolean = false,
   val detail: Boolean = false,
+  val tyCheck: Boolean = false,
   val logPW: Option[PrintWriter] = None,
   val timeLimit: Option[Int] = None,
 ) {
@@ -129,7 +131,9 @@ class Interpreter(
       val addr = eval(list).asAddr
       st.context.locals += lhs -> st.pop(addr, front)
     case ret @ IReturn(expr) =>
-      st.context.retVal = Some(ret, eval(expr))
+      val retVal = eval(expr)
+      if (tyCheck) addReturnTypeError(retVal, ret)
+      st.context.retVal = Some(ret, retVal)
     case IAssert(expr) =>
       optional(eval(expr)) match
         case None             => /* skip not yet compiled assertions */
@@ -366,6 +370,14 @@ class Interpreter(
           case _       => throw RemainingArgs(args)
       case (param :: pl, arg :: al) =>
         map += param.lhs -> arg
+        if (tyCheck)
+          val paramTy = param.ty.ty
+          val idx = params.indexOf(param)
+          if (func.isMethod && idx == 0) ()
+          else if (paramTy.isDefined && !paramTy.contains(arg, st))
+            val callPoint = CallPoint(st.context.func, caller, func)
+            val aap = ArgAssignPoint(callPoint, idx)
+            addError(ParamTypeMismatch(aap, st.typeOf(arg)))
         aux(pl, al)
     }
     aux(params, args)
@@ -419,6 +431,21 @@ class Interpreter(
   /** cache to get syntax-directed operation (SDO) */
   private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
 
+  /** type mismatch errors */
+  private val typeErrors: MSet[TypeError] = MSet()
+  def getTypeErrors = typeErrors
+  private def addError(error: TypeError): Unit = typeErrors += error
+  private def addReturnTypeError(retVal: Value, returnInst: IReturn): Unit =
+    val retTy = st.context.func.irFunc.retTy.ty
+    if (retTy.isDefined && !retTy.contains(retVal, st)) {
+      val node = st.context.cursor match
+        case NodeCursor(_, node, _) => node
+        case _ => BaseUtils.error("cursor is not node cursor")
+      val irp = InternalReturnPoint(st.context.func, node, returnInst)
+      addError(ReturnTypeMismatch(irp, st.typeOf(retVal)))
+    }
+  // ToDo : private def addParamTypeError()
+
   // create a new context
   private def createContext(
     call: Call,
@@ -465,9 +492,10 @@ object Interpreter {
     st: State,
     log: Boolean = false,
     detail: Boolean = false,
+    tyCheck: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-  ): State = new Interpreter(st, log, detail, logPW, timeLimit).result
+  ): State = new Interpreter(st, log, detail, tyCheck, logPW, timeLimit).result
 
   /** transition for lexical SDO */
   def eval(lex: Lexical, sdoName: String): Value = {

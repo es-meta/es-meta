@@ -48,25 +48,24 @@ case object Eval extends Phase[CFG, State] {
     } else run(cfg, config, getFirstFilename(cmdConfig, this.name))
 
   def run(cfg: CFG, config: Config, filename: String): State =
+    val interp = new Interpreter(
+      cfg.init.fromFile(filename),
+      log = config.log,
+      detail = config.detail,
+      tyCheck = config.tyCheck,
+      timeLimit = config.timeLimit,
+    )
+    val res = interp.result
     if (config.tyCheck) {
-      val (finalSt, errors) = TypeChecker(
-        cfg.init.fromFile(filename),
-        config.timeLimit,
-      )
+      val errors = interp.getTypeErrors
       if (config.multiple) {
         for { error <- errors } do {
           val updated = totalErrors.getOrElse(error, Set()) + filename
           totalErrors += error -> updated
         }
       } else for (error <- errors) println(error.toString + LINE_SEP)
-      finalSt
-    } else
-      Interpreter(
-        cfg.init.fromFile(filename),
-        log = config.log,
-        detail = config.detail,
-        timeLimit = config.timeLimit,
-      )
+    }
+    res
 
   def defaultConfig: Config = Config()
   val options: List[PhaseOption[Config]] = List(

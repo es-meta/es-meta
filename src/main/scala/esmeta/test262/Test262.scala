@@ -289,22 +289,22 @@ case class Test262(
     filename: String,
     tyCheck: Boolean,
   ): State =
-    val st = cfg.init.from(code, ast)
+    val interp = new Interpreter(
+      cfg.init.from(code, ast),
+      log = log,
+      detail = detail,
+      logPW = logPW,
+      timeLimit = timeLimit,
+    )
+    val res = interp.result
     if (tyCheck) {
-      val (finalSt, errors) = TypeChecker(st, timeLimit)
+      val errors = interp.getTypeErrors
       for { error <- errors } do {
         val updated = totalErrors.getOrElse(error, Set()) + filename
         totalErrors += error -> updated
       }
-      finalSt
-    } else
-      Interpreter(
-        st = st,
-        log = log,
-        detail = detail,
-        logPW = logPW,
-        timeLimit = timeLimit,
-      )
+    }
+    res
 
   // logging mode for tests
   private def logForTests(
