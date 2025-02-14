@@ -15,23 +15,22 @@ import esmeta.spec.{
   BuiltinHead,
 }
 import esmeta.ty.*
-import esmeta.util.BaseUtils.{error => _, *}
+import esmeta.util.BaseUtils.*
 import esmeta.util.SystemUtils.*
 import esmeta.{EVAL_LOG_DIR, LINE_SEP}
 import java.io.PrintWriter
 import java.math.MathContext.DECIMAL128
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
-import scala.collection.mutable.{Map => MMap, Set => MSet}
+import scala.collection.mutable.{Map => MMap}
 import scala.math.{BigInt => SBigInt}
-import esmeta.util.BaseUtils
 
 /** extensible helper of IR interpreter with a CFG */
 class Interpreter(
   val st: State,
+  val tyCheck: Boolean = false,
   val log: Boolean = false,
   val detail: Boolean = false,
-  val tyCheck: Boolean = false,
   val logPW: Option[PrintWriter] = None,
   val timeLimit: Option[Int] = None,
 ) {
@@ -42,6 +41,12 @@ class Interpreter(
 
   /** iteration cycle */
   lazy val ITER_CYCLE: Int = 100_000
+
+  /** detected type errors */
+  def errors: Set[TypeError] = errorMap.values.toSet
+  protected def addError(error: TypeError): Unit =
+    errorMap += error.point -> error
+  private var errorMap: Map[TypeErrorPoint, TypeError] = Map()
 
   /** final state */
   lazy val result: State =
@@ -132,7 +137,15 @@ class Interpreter(
       st.context.locals += lhs -> st.pop(addr, front)
     case ret @ IReturn(expr) =>
       val retVal = eval(expr)
-      if (tyCheck) addReturnTypeError(retVal, ret)
+      if (tyCheck)
+        val retTy = st.context.func.irFunc.retTy.ty
+        if (retTy.isDefined && !retTy.contains(retVal, st)) {
+          val node = st.context.cursor match
+            case NodeCursor(_, node, _) => node
+            case _                      => error("cursor is not node cursor")
+          val irp = InternalReturnPoint(st.context.func, node, ret)
+          addError(ReturnTypeMismatch(irp, st.typeOf(retVal)))
+        }
       st.context.retVal = Some(ret, retVal)
     case IAssert(expr) =>
       optional(eval(expr)) match
@@ -431,21 +444,6 @@ class Interpreter(
   /** cache to get syntax-directed operation (SDO) */
   private val getSdo = cached[(Ast, String), Option[(Ast, Func)]](_.getSdo(_))
 
-  /** type mismatch errors */
-  private val typeErrors: MSet[TypeError] = MSet()
-  def getTypeErrors = typeErrors
-  private def addError(error: TypeError): Unit = typeErrors += error
-  private def addReturnTypeError(retVal: Value, returnInst: IReturn): Unit =
-    val retTy = st.context.func.irFunc.retTy.ty
-    if (retTy.isDefined && !retTy.contains(retVal, st)) {
-      val node = st.context.cursor match
-        case NodeCursor(_, node, _) => node
-        case _ => BaseUtils.error("cursor is not node cursor")
-      val irp = InternalReturnPoint(st.context.func, node, returnInst)
-      addError(ReturnTypeMismatch(irp, st.typeOf(retVal)))
-    }
-  // ToDo : private def addParamTypeError()
-
   // create a new context
   private def createContext(
     call: Call,
@@ -490,12 +488,12 @@ class Interpreter(
 object Interpreter {
   def apply(
     st: State,
+    tyCheck: Boolean = false,
     log: Boolean = false,
     detail: Boolean = false,
-    tyCheck: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-  ): State = new Interpreter(st, log, detail, tyCheck, logPW, timeLimit).result
+  ): State = new Interpreter(st, tyCheck, log, detail, logPW, timeLimit).result
 
   /** transition for lexical SDO */
   def eval(lex: Lexical, sdoName: String): Value = {

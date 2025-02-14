@@ -14,7 +14,12 @@ case object Eval extends Phase[CFG, State] {
   val name = "eval"
   val help = "evaluates an ECMAScript file."
 
-  val totalErrors: MMap[TypeError, Set[String]] = MMap()
+  def errors: Set[TypeError] = errorMap.keys.toSet
+  protected def addError(error: TypeError, filename: String): Unit =
+    errorMap.get(error) match
+      case None      => errorMap += error -> Set(filename)
+      case Some(set) => errorMap += error -> (set + filename)
+  private var errorMap: Map[TypeError, Set[String]] = Map()
 
   def apply(
     cfg: CFG,
@@ -30,42 +35,30 @@ case object Eval extends Phase[CFG, State] {
         if jsFilter(filename)
       } st = run(cfg, config, filename)
       if (config.tyCheck)
-        val pw = getPrintWriter(s"$EVAL_LOG_DIR/errors")
-        val sorted: Vector[TypeError] =
-          totalErrors.iterator.toVector
-            .sortBy { case (_, tests) => -tests.size }
-            .map(_._1)
-        pw.println(s"${sorted.length} type errors detected." + LINE_SEP)
-        for { error <- sorted } do {
-          pw.println(error)
-          pw.println(s"- Found in ${totalErrors(error).size} file(s)")
-          val sample = totalErrors(error).head
-          pw.println(s"  - sample: ${sample}")
-          pw.println(LINE_SEP)
-          pw.flush
-        }
+        dumpFile(
+          name = "detected type errors",
+          data = errorMap.toVector
+            .sortBy(-_._2.size)
+            .map(_._1.toString)
+            .mkString(LINE_SEP + LINE_SEP),
+          filename = s"$EVAL_LOG_DIR/errors",
+        )
       st
     } else run(cfg, config, getFirstFilename(cmdConfig, this.name))
 
   def run(cfg: CFG, config: Config, filename: String): State =
     val interp = new Interpreter(
       cfg.init.fromFile(filename),
+      tyCheck = config.tyCheck,
       log = config.log,
       detail = config.detail,
-      tyCheck = config.tyCheck,
       timeLimit = config.timeLimit,
     )
-    val res = interp.result
-    if (config.tyCheck) {
-      val errors = interp.getTypeErrors
-      if (config.multiple) {
-        for { error <- errors } do {
-          val updated = totalErrors.getOrElse(error, Set()) + filename
-          totalErrors += error -> updated
-        }
-      } else for (error <- errors) println(error.toString + LINE_SEP)
-    }
-    res
+    val st = interp.result
+    if (config.tyCheck)
+      if (config.multiple) interp.errors.foreach(addError(_, filename))
+      else interp.errors.foreach(e => println(e.toString + LINE_SEP))
+    st
 
   def defaultConfig: Config = Config()
   val options: List[PhaseOption[Config]] = List(
@@ -80,6 +73,11 @@ case object Eval extends Phase[CFG, State] {
       "execute multiple programs (result is the state of the last program).",
     ),
     (
+      "type-check",
+      BoolOption(_.tyCheck = _),
+      "perform dynamic type checking.",
+    ),
+    (
       "log",
       BoolOption(_.log = _),
       "turn on logging mode.",
@@ -89,17 +87,12 @@ case object Eval extends Phase[CFG, State] {
       BoolOption((c, b) => { c.log ||= b; c.detail = b }),
       "turn on logging mode with detailed information.",
     ),
-    (
-      "type-check",
-      BoolOption(_.tyCheck = _),
-      "perform dynamic type checking.",
-    ),
   )
   case class Config(
     var timeLimit: Option[Int] = None,
     var multiple: Boolean = false,
+    var tyCheck: Boolean = false,
     var log: Boolean = false,
     var detail: Boolean = false,
-    var tyCheck: Boolean = false,
   )
 }

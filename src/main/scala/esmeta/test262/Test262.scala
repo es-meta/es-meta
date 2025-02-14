@@ -6,7 +6,7 @@ import esmeta.error.{NotSupported, InvalidExit, UnexpectedParseResult}
 import esmeta.error.NotSupported.*
 import esmeta.es.*
 import esmeta.es.util.*
-import esmeta.interpreter.*
+import esmeta.interpreter.Interpreter
 import esmeta.parser.ESParser
 import esmeta.ty.{*, given}
 import esmeta.state.*
@@ -17,7 +17,7 @@ import esmeta.util.{ConcurrentPolicy => CP}
 import esmeta.util.SystemUtils.*
 import java.io.PrintWriter
 import java.util.concurrent.TimeoutException
-import scala.collection.mutable.{Map => MMap, Set => MSet}
+import scala.collection.mutable.{Map => MMap}
 
 /** data in Test262 */
 case class Test262(
@@ -64,6 +64,14 @@ case class Test262(
 
   /** specification */
   val spec = cfg.spec
+
+  /** detected type errors */
+  def errors: Set[TypeError] = errorMap.keys.toSet
+  protected def addError(error: TypeError, filename: String): Unit =
+    errorMap.get(error) match
+      case None      => errorMap += error -> Set(filename)
+      case Some(set) => errorMap += error -> (set + filename)
+  private var errorMap: Map[TypeError, Set[String]] = Map()
 
   /** load test262 */
   def loadTest(filename: String): Code =
@@ -125,13 +133,13 @@ case class Test262(
   def evalTest(
     paths: Option[List[String]] = None,
     features: Option[List[String]] = None,
+    tyCheck: Boolean = false,
     log: Boolean = false,
     detail: Boolean = false,
     useProgress: Boolean = false,
     useCoverage: Boolean = false,
     timeLimit: Option[Int] = None, // default: no limit
     concurrent: CP = CP.Single,
-    tyCheck: Boolean = false,
     verbose: Boolean = false,
   ): Summary = {
     // extract tests from paths
@@ -146,6 +154,7 @@ case class Test262(
     // open log file
     val logPW = getPrintWriter(s"$TEST262TEST_LOG_DIR/log")
 
+    // stringifier for dynamic type checking
     val tyStringifier = TyElem.getStringifier(true, false)
     import tyStringifier.given
 
@@ -182,11 +191,11 @@ case class Test262(
           if (!useCoverage)
             evalFile(
               filename,
+              tyCheck,
               log && !multiple,
               detail,
               Some(logPW),
               timeLimit,
-              tyCheck,
             )
           else {
             val (ast, code) = loadTest(filename)
@@ -197,7 +206,15 @@ case class Test262(
       ,
       // dump coverage
       postJob = logDir =>
-        if (tyCheck) dumpTypeErrors(s"$logDir/tycheck")
+        if (tyCheck)
+          dumpFile(
+            name = "detected type errors",
+            data = errorMap.toVector
+              .sortBy(-_._2.size)
+              .map(_._1.toString)
+              .mkString(LINE_SEP + LINE_SEP),
+            filename = s"$logDir/tycheck/errors",
+          )
         if (useCoverage) cov.dumpTo(logDir),
     )
 
@@ -269,42 +286,38 @@ case class Test262(
   // eval ECMAScript code
   private def evalFile(
     filename: String,
+    tyCheck: Boolean,
     log: Boolean = false,
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-    tyCheck: Boolean,
   ): State =
     val (ast, code) = loadTest(filename)
-    eval(code, ast, log, detail, logPW, timeLimit, filename, tyCheck)
+    eval(code, ast, filename, tyCheck, log, detail, logPW, timeLimit)
 
   // eval ECMAScript code
   private def eval(
     code: String,
     ast: Ast,
+    filename: String,
+    tyCheck: Boolean,
     log: Boolean = false,
     detail: Boolean = false,
     logPW: Option[PrintWriter] = None,
     timeLimit: Option[Int] = None,
-    filename: String,
-    tyCheck: Boolean,
   ): State =
+    val st = cfg.init.from(code, ast)
     val interp = new Interpreter(
-      cfg.init.from(code, ast),
+      st = st,
+      tyCheck = tyCheck,
       log = log,
       detail = detail,
       logPW = logPW,
       timeLimit = timeLimit,
     )
-    val res = interp.result
-    if (tyCheck) {
-      val errors = interp.getTypeErrors
-      for { error <- errors } do {
-        val updated = totalErrors.getOrElse(error, Set()) + filename
-        totalErrors += error -> updated
-      }
-    }
-    res
+    val finalSt = interp.result
+    if (tyCheck) interp.errors.foreach(addError(_, filename))
+    finalSt
 
   // logging mode for tests
   private def logForTests(
@@ -339,26 +352,5 @@ case class Test262(
 
     // post job
     postJob(logDir)
-
-  // detected type errors while dynamic type checking
-  private val totalErrors: MMap[TypeError, Set[String]] = MMap()
-
-  // helper dump function for type errors
-  private def dumpTypeErrors(baseDir: String): Unit =
-    val dtcPW = getPrintWriter(s"$baseDir/errors")
-    val sorted: Vector[TypeError] =
-      totalErrors.iterator.toVector
-        .sortBy { case (_, tests) => -tests.size }
-        .map(_._1)
-    dtcPW.println(s"${sorted.length} type errors detected." + LINE_SEP)
-    for { error <- sorted } do {
-      dtcPW.println(error)
-      dtcPW.println(s"- Found in ${totalErrors(error).size} test(s)")
-      val sample = totalErrors(error).head.drop(TEST262_TEST_DIR.length + 1)
-      dtcPW.println(s"  - sample: ${sample}")
-      dtcPW.println(LINE_SEP)
-      dtcPW.flush
-    }
-    dtcPW.close()
 }
 object Test262 extends Git(TEST262_DIR)
