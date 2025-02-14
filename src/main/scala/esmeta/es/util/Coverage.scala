@@ -242,13 +242,12 @@ case class Coverage(
       )
       log("dumped unreachable functions")
     if (tyCheck)
+      // !TODO: Minimize error message
       dumpJson(
         name = "minimal detected type errors",
         data = _errorMap
           .filter(_._2.nonEmpty)
-          .map((name, errors) =>
-            name -> errors.map(_.toString),
-          ) // !TODO: Minimize error message
+          .map((name, errors) => name -> errors.map(_.toString))
           .asJson,
         filename = s"$baseDir/minimal-errors.json",
         noSpace = false,
